@@ -143,7 +143,6 @@ type ContainerParams struct {
 	PostgresContainerRequest *testcontainers.GenericContainerRequest `name:"postgres"`
 	PostgresContainer        testcontainers.Container                `name:"postgres"`
 	Request                  *testcontainers.GenericContainerRequest `name:"zitadel"`
-	Logger                   *slog.Logger                            `optional:"true"`
 }
 
 func Actualize(p ContainerParams) (testcontainers.Container, error) {
@@ -177,17 +176,15 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if p.Logger != nil {
-				zitadelEndpoint, err := c.Endpoint(context.Background(), "")
-				if err != nil {
-					return fmt.Errorf("failed to get zitadel endpoint: %w", err)
-				}
-				p.Logger.Info("Zitadel container is running at", "addr", zitadelEndpoint)
-				p.Logger.Info("Zitadel is accessible via admin credentials",
-					"username", fmt.Sprintf("%s@%s.%s", p.Request.Env["ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME"], strings.ToLower(p.Request.Env["ZITADEL_FIRSTINSTANCE_ORG_NAME"]), mockestra.LoopbackAddress),
-					"password", p.Request.Env["ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD"],
-				)
+			zitadelEndpoint, err := c.Endpoint(context.Background(), "")
+			if err != nil {
+				return fmt.Errorf("failed to get zitadel endpoint: %w", err)
 			}
+			slog.Info("Zitadel container is running at", "addr", zitadelEndpoint)
+			slog.Info("Zitadel is accessible via admin credentials",
+				"username", fmt.Sprintf("%s@%s.%s", p.Request.Env["ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME"], strings.ToLower(p.Request.Env["ZITADEL_FIRSTINSTANCE_ORG_NAME"]), mockestra.LoopbackAddress),
+				"password", p.Request.Env["ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD"],
+			)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {

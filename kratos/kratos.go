@@ -259,7 +259,6 @@ type ContainerParams struct {
 	PostgresContainerRequest *testcontainers.GenericContainerRequest `name:"postgres"`
 	PostgresContainer        testcontainers.Container                `name:"postgres"`
 	Request                  *testcontainers.GenericContainerRequest `name:"kratos"`
-	Logger                   *slog.Logger                            `optional:"true"`
 }
 
 func Actualize(p ContainerParams) (testcontainers.Container, error) {
@@ -312,7 +311,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 		return nil, fmt.Errorf("failed to run %s migration: %w", ContainerPrettyName, err)
 	}
 	if err := migrateContainer.Terminate(context.Background()); err != nil {
-		p.Logger.Warn(fmt.Sprintf("an error occurred while terminating %s migration container", ContainerPrettyName), "error", err)
+		slog.Warn(fmt.Sprintf("an error occurred while terminating %s migration container", ContainerPrettyName), "error", err)
 	}
 
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
@@ -321,32 +320,28 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if p.Logger != nil {
-				portLabels := map[string]string{
-					Port:      "API",
-					AdminPort: "Admin API",
-				}
-				var endpoints []any
-				for port, label := range portLabels {
-					endpoint, err := c.PortEndpoint(context.Background(), nat.Port(port), "")
-					if err != nil {
-						return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
-					}
-					endpoints = append(endpoints, label)
-					endpoints = append(endpoints, endpoint)
-				}
-				p.Logger.Info(fmt.Sprintf("%s container is running", ContainerPrettyName), endpoints...)
+			portLabels := map[string]string{
+				Port:      "API",
+				AdminPort: "Admin API",
 			}
+			var endpoints []any
+			for port, label := range portLabels {
+				endpoint, err := c.PortEndpoint(context.Background(), nat.Port(port), "")
+				if err != nil {
+					return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
+				}
+				endpoints = append(endpoints, label)
+				endpoints = append(endpoints, endpoint)
+			}
+			slog.Info(fmt.Sprintf("%s container is running", ContainerPrettyName), endpoints...)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			err := c.Terminate(ctx)
-			if p.Logger != nil {
-				if err != nil {
-					p.Logger.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
-				} else {
-					p.Logger.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
-				}
+			if err != nil {
+				slog.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
+			} else {
+				slog.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
 			}
 			return err
 		},

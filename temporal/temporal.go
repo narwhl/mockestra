@@ -52,7 +52,6 @@ type ContainerParams struct {
 	fx.In
 	Lifecycle fx.Lifecycle
 	Request   *testcontainers.GenericContainerRequest `name:"temporal"`
-	Logger    *slog.Logger                            `optional:"true"`
 }
 
 func Actualize(p ContainerParams) (testcontainers.Container, error) {
@@ -62,32 +61,29 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if p.Logger != nil {
-				temporalPort, err := c.MappedPort(ctx, Port)
-				if err != nil {
-					return fmt.Errorf("unable to get %s port: %w", ContainerPrettyName, err)
-				}
-
-				temporalUiPort, err := c.MappedPort(ctx, UIPort)
-				if err != nil {
-					return fmt.Errorf("unable to get %s ui port: %w", ContainerPrettyName, err)
-				}
-
-				p.Logger.Info(
-					fmt.Sprintf("%s container is running", ContainerPrettyName),
-					"addr", fmt.Sprintf("localhost:%s", temporalPort.Port()),
-					"ui", fmt.Sprintf("localhost:%s", temporalUiPort.Port()))
+			temporalPort, err := c.MappedPort(ctx, Port)
+			if err != nil {
+				return fmt.Errorf("unable to get %s port: %w", ContainerPrettyName, err)
 			}
+
+			temporalUiPort, err := c.MappedPort(ctx, UIPort)
+			if err != nil {
+				return fmt.Errorf("unable to get %s ui port: %w", ContainerPrettyName, err)
+			}
+
+			slog.Info(
+				fmt.Sprintf("%s container is running", ContainerPrettyName),
+				"addr", fmt.Sprintf("localhost:%s", temporalPort.Port()),
+				"ui", fmt.Sprintf("localhost:%s", temporalUiPort.Port()),
+			)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			err := c.Terminate(ctx)
-			if p.Logger != nil {
-				if err != nil {
-					p.Logger.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
-				} else {
-					p.Logger.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
-				}
+			if err != nil {
+				slog.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
+			} else {
+				slog.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
 			}
 			return err
 		},

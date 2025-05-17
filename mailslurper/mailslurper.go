@@ -50,7 +50,6 @@ type ContainerParams struct {
 	fx.In
 	Lifecycle fx.Lifecycle
 	Request   *testcontainers.GenericContainerRequest `name:"mailslurper"`
-	Logger    *slog.Logger                            `optional:"true"`
 }
 
 func Actualize(p ContainerParams) (testcontainers.Container, error) {
@@ -60,33 +59,29 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if p.Logger != nil {
-				portLabels := map[string]string{
-					Port:     "dashboard",
-					APIPort:  "api",
-					SMTPPort: "SMTP",
-				}
-				var endpoints []any
-				for port, label := range portLabels {
-					endpoint, err := c.PortEndpoint(context.Background(), nat.Port(port), "")
-					if err != nil {
-						return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
-					}
-					endpoints = append(endpoints, label)
-					endpoints = append(endpoints, endpoint)
-				}
-				p.Logger.Info(fmt.Sprintf("%s container is running", ContainerPrettyName), endpoints...)
+			portLabels := map[string]string{
+				Port:     "dashboard",
+				APIPort:  "api",
+				SMTPPort: "SMTP",
 			}
+			var endpoints []any
+			for port, label := range portLabels {
+				endpoint, err := c.PortEndpoint(context.Background(), nat.Port(port), "")
+				if err != nil {
+					return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
+				}
+				endpoints = append(endpoints, label)
+				endpoints = append(endpoints, endpoint)
+			}
+			slog.Info(fmt.Sprintf("%s container is running", ContainerPrettyName), endpoints...)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			err := c.Terminate(ctx)
-			if p.Logger != nil {
-				if err != nil {
-					p.Logger.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
-				} else {
-					p.Logger.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
-				}
+			if err != nil {
+				slog.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
+			} else {
+				slog.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
 			}
 			return err
 		},

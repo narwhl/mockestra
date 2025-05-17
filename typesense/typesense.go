@@ -64,7 +64,6 @@ type ContainerParams struct {
 	fx.In
 	Lifecycle fx.Lifecycle
 	Request   *testcontainers.GenericContainerRequest `name:"typesense"`
-	Logger    *slog.Logger                            `optional:"true"`
 }
 
 func Actualize(p ContainerParams) (testcontainers.Container, error) {
@@ -74,23 +73,19 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if p.Logger != nil {
-				typesenseEndpoint, err := c.Endpoint(ctx, "")
-				if err != nil {
-					return fmt.Errorf("failed to get %s endpoint: %w", ContainerPrettyName, err)
-				}
-				p.Logger.Info(fmt.Sprintf("%s container is running at", ContainerPrettyName), "addr", typesenseEndpoint)
+			typesenseEndpoint, err := c.Endpoint(ctx, "")
+			if err != nil {
+				return fmt.Errorf("failed to get %s endpoint: %w", ContainerPrettyName, err)
 			}
+			slog.Info(fmt.Sprintf("%s container is running at", ContainerPrettyName), "addr", typesenseEndpoint)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			err := c.Terminate(ctx)
-			if p.Logger != nil {
-				if err != nil {
-					p.Logger.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
-				} else {
-					p.Logger.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
-				}
+			if err != nil {
+				slog.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
+			} else {
+				slog.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
 			}
 			return err
 		},

@@ -16,7 +16,6 @@ import (
 type ProxyParams struct {
 	fx.In
 	MailslurperContainer testcontainers.Container `name:"mailslurper"`
-	Logger               *slog.Logger             `optional:"true"`
 	Lifecycle            fx.Lifecycle
 }
 
@@ -34,9 +33,7 @@ func NewProxy(p ProxyParams) (*proxy.TCPProxy, error) {
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if p.Logger != nil {
-				p.Logger.Info("Forwarding mailslurper API traffic via proxy", "from_addr", apiAccessProxy.ListenAddress, "to_addr", apiAccessProxy.TargetAddress)
-			}
+			slog.Info("Forwarding mailslurper API traffic via proxy", "from_addr", apiAccessProxy.ListenAddress, "to_addr", apiAccessProxy.TargetAddress)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {

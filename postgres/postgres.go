@@ -104,7 +104,6 @@ type ContainerParams struct {
 	fx.In
 	Lifecycle fx.Lifecycle
 	Request   *testcontainers.GenericContainerRequest `name:"postgres"`
-	Logger    *slog.Logger                            `optional:"true"`
 }
 
 // Actualize is a constructor that returns a testcontainers.Container
@@ -118,23 +117,19 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if p.Logger != nil {
-				postgresPort, err := c.MappedPort(ctx, Port)
-				if err != nil {
-					return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
-				}
-				p.Logger.Info(fmt.Sprintf("%s container is running", ContainerPrettyName), "addr", fmt.Sprintf("localhost:%s", postgresPort.Port()))
+			postgresPort, err := c.MappedPort(ctx, Port)
+			if err != nil {
+				return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
 			}
+			slog.Info(fmt.Sprintf("%s container is running", ContainerPrettyName), "addr", fmt.Sprintf("localhost:%s", postgresPort.Port()))
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			err := c.Terminate(ctx)
-			if p.Logger != nil {
-				if err != nil {
-					p.Logger.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
-				} else {
-					p.Logger.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
-				}
+			if err != nil {
+				slog.Warn(fmt.Sprintf("an error occurred while terminating %s container", ContainerPrettyName), "error", err)
+			} else {
+				slog.Info(fmt.Sprintf("%s container is terminated", ContainerPrettyName))
 			}
 			return err
 		},

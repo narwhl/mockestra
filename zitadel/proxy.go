@@ -19,7 +19,6 @@ const (
 type ProxyParams struct {
 	fx.In
 	ZitadelContainer testcontainers.Container `name:"zitadel"`
-	Logger           *slog.Logger             `optional:"true"`
 	Lifecycle        fx.Lifecycle
 }
 
@@ -37,9 +36,7 @@ func NewProxy(p ProxyParams) (*proxy.TCPProxy, error) {
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if p.Logger != nil {
-				p.Logger.Info("Forwarding Zitadel traffic via proxy", "from_addr", accessProxy.ListenAddress, "to_addr", accessProxy.TargetAddress)
-			}
+			slog.Info("Forwarding Zitadel traffic via proxy", "from_addr", accessProxy.ListenAddress, "to_addr", accessProxy.TargetAddress)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {

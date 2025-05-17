@@ -16,7 +16,6 @@ import (
 type ProxyParams struct {
 	fx.In
 	KratosContainer testcontainers.Container `name:"kratos"`
-	Logger          *slog.Logger             `optional:"true"`
 	Lifecycle       fx.Lifecycle
 }
 
@@ -35,9 +34,7 @@ func NewProxy(portName string, port nat.Port) func(p ProxyParams) (*proxy.TCPPro
 		}
 		p.Lifecycle.Append(fx.Hook{
 			OnStart: func(ctx context.Context) error {
-				if p.Logger != nil {
-					p.Logger.Info(fmt.Sprintf("Forwarding %s %s traffic via proxy", ContainerPrettyName, portName), "from_addr", apiAccessProxy.ListenAddress, "to_addr", apiAccessProxy.TargetAddress)
-				}
+				slog.Info(fmt.Sprintf("Forwarding %s %s traffic via proxy", ContainerPrettyName, portName), "from_addr", apiAccessProxy.ListenAddress, "to_addr", apiAccessProxy.TargetAddress)
 				return nil
 			},
 			OnStop: func(ctx context.Context) error {
