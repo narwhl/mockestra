@@ -12,7 +12,9 @@ import (
 )
 
 const (
-	Port = "6379/tcp"
+	Tag   = "valkey"
+	Image = "valkey/valkey"
+	Port  = "6379/tcp"
 
 	ContainerPrettyName = "Valkey"
 )
@@ -27,8 +29,8 @@ type RequestParams struct {
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:         fmt.Sprintf("mock-%s-valkey", p.Prefix),
-			Image:        fmt.Sprintf("valkey/valkey:%s", p.Version),
+			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port},
 			Env:          make(map[string]string),
 			WaitingFor:   wait.ForListeningPort(Port),

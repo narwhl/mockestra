@@ -11,6 +11,8 @@ import (
 )
 
 const (
+	Tag         = "minio"
+	Image       = "minio/minio"
 	Port        = "9000/tcp"
 	ConsolePort = "9001/tcp"
 
@@ -40,8 +42,8 @@ type RequestParams struct {
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:  fmt.Sprintf("mock-%s-minio", p.Prefix),
-			Image: fmt.Sprintf("minio/minio:%s", p.Version),
+			Name:  fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image: fmt.Sprintf("%s:%s", Image, p.Version),
 			Cmd:   []string{"server", "/data"},
 			ExposedPorts: []string{
 				Port,
@@ -98,7 +100,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 var WithPostReadyHook = mockestra.WithPostReadyHook
 
 var Module = mockestra.BuildContainerModule(
-	"minio",
+	Tag,
 	fx.Provide(
 		fx.Annotate(
 			New,

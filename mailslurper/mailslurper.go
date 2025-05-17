@@ -13,6 +13,8 @@ import (
 )
 
 const (
+	Tag      = "mailslurper"
+	Image    = "oryd/mailslurper"
 	Port     = "4436/tcp"
 	APIPort  = "4437/tcp"
 	SMTPPort = "1025/tcp"
@@ -30,8 +32,8 @@ type RequestParams struct {
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:         fmt.Sprintf("mock-%s-mailslurper", p.Prefix),
-			Image:        fmt.Sprintf("oryd/mailslurper:%s", p.Version),
+			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port, APIPort, SMTPPort},
 			WaitingFor:   wait.ForHTTP("/").WithPort(Port),
 		},
@@ -92,7 +94,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 var WithPostReadyHook = mockestra.WithPostReadyHook
 
 var Module = mockestra.BuildContainerModule(
-	"mailslurper",
+	Tag,
 	fx.Provide(
 		fx.Annotate(
 			New,

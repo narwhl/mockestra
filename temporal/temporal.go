@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	Tag    = "temporal"
+	Image  = "temporalio/auto-setup"
 	Port   = "7233/tcp"
 	UIPort = "8233/tcp"
 
@@ -29,8 +31,8 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:         fmt.Sprintf("mock-%s-temporal", p.Prefix),
-			Image:        fmt.Sprintf("temporalio/auto-setup:%s", p.Version),
+			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port, UIPort},
 			WaitingFor:   wait.ForHTTP("/").WithPort(UIPort),
 			Entrypoint:   []string{"/usr/local/bin/temporal"},

@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	Tag          = "zitadel"
+	Image        = "ghcr.io/zitadel/zitadel"
 	Port         = "8080/tcp"
 	DatabaseName = "zitadel"
 )
@@ -35,8 +37,8 @@ type RequestParams struct {
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        fmt.Sprintf("ghcr.io/zitadel/zitadel:%s", p.Version),
-			Name:         fmt.Sprintf("mock-%s-zitadel", p.Prefix),
+			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
+			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
 			ExposedPorts: []string{Port},
 			Env: map[string]string{
 				"ZITADEL_EXTERNALDOMAIN": mockestra.LoopbackAddress,

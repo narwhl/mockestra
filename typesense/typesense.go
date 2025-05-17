@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	Port = "8108/tcp"
+	Tag   = "typesense"
+	Image = "typesense/typesense"
+	Port  = "8108/tcp"
 
 	ContainerPrettyName = "Typesense"
 )
@@ -35,8 +37,8 @@ type RequestParams struct {
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:         fmt.Sprintf("mock-%s-typesense", p.Prefix),
-			Image:        fmt.Sprintf("typesense/typesense:%s", p.Version),
+			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port},
 			Env: map[string]string{
 				"TYPESENSE_DATA_DIR": "/data",
@@ -96,7 +98,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 var WithPostReadyHook = mockestra.WithPostReadyHook
 
 var Module = mockestra.BuildContainerModule(
-	"typesense",
+	Tag,
 	fx.Provide(
 		fx.Annotate(
 			New,

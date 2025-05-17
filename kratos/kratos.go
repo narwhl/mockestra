@@ -18,6 +18,8 @@ import (
 )
 
 const (
+	Tag       = "kratos"
+	Image     = "oryd/kratos"
 	Port      = "4433/tcp"
 	AdminPort = "4434/tcp"
 
@@ -198,8 +200,8 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 		return nil, fmt.Errorf("failed to generate kratos system secret: %w", err)
 	}
 	req := testcontainers.ContainerRequest{
-		Name:         fmt.Sprintf("mock-%s-kratos", p.Prefix),
-		Image:        fmt.Sprintf("oryd/kratos:%s", p.Version),
+		Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+		Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 		ExposedPorts: []string{Port, AdminPort},
 		Env: map[string]string{
 			"SECRETS_COOKIE_0":                                           kratosCookieSecret,
@@ -352,7 +354,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 var WithPostReadyHook = mockestra.WithPostReadyHook
 
 var Module = mockestra.BuildContainerModule(
-	"kratos",
+	Tag,
 	fx.Provide(
 		fx.Annotate(
 			New,

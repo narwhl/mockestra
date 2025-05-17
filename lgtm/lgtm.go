@@ -13,6 +13,8 @@ import (
 )
 
 const (
+	Tag      = "lgtm"
+	Image    = "grafana/otel-lgtm"
 	Port     = "3000/tcp"
 	HttpPort = "4318/tcp"
 	GrpcPort = "4317/tcp"
@@ -30,8 +32,8 @@ type RequestParams struct {
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:  fmt.Sprintf("mock-%s-lgtm", p.Prefix),
-			Image: fmt.Sprintf("grafana/otel-lgtm:%s", p.Version),
+			Name:  fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image: fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{
 				Port,
 				HttpPort,
@@ -97,7 +99,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 }
 
 var Module = mockestra.BuildContainerModule(
-	"lgtm",
+	Tag,
 	fx.Provide(
 		fx.Annotate(
 			New,

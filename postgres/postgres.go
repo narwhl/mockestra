@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	Port = "5432/tcp"
+	Tag   = "postgres"
+	Image = "postgres"
+	Port  = "5432/tcp"
 
 	ContainerPrettyName = "Postgres"
 )
@@ -83,8 +85,8 @@ type RequestParams struct {
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:         fmt.Sprintf("mock-%s-postgres", p.Prefix),
-			Image:        fmt.Sprintf("postgres:%s", p.Version),
+			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port},
 			Env:          make(map[string]string),
 		},
@@ -138,7 +140,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 }
 
 var Module = mockestra.BuildContainerModule(
-	"postgres",
+	Tag,
 	fx.Provide(
 		fx.Annotate(
 			New,

@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	Tag       = "hydra"
+	Image     = "oryd/hydra"
 	Port      = "4444/tcp"
 	AdminPort = "4445/tcp"
 
@@ -80,8 +82,8 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 		return nil, err
 	}
 	req := testcontainers.ContainerRequest{
-		Name:         fmt.Sprintf("mock-%s-hydra", p.Prefix),
-		Image:        fmt.Sprintf("oryd/hydra:%s", p.Version),
+		Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+		Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 		ExposedPorts: []string{Port, AdminPort},
 		Env: map[string]string{
 			"SERVE_COOKIES_SAME_SITE_MODE":               "Lax",
@@ -185,7 +187,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 var WithPostReadyHook = mockestra.WithPostReadyHook
 
 var Module = mockestra.BuildContainerModule(
-	"hydra",
+	Tag,
 	fx.Provide(
 		fx.Annotate(
 			New,
