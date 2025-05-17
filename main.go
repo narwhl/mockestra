@@ -77,7 +77,6 @@ func Versions(m map[string]string) []fx.Option {
 		opts = append(opts, fx.Supply(
 			fx.Annotate(
 				v,
-				fx.As(new(string)),
 				fx.ResultTags(fmt.Sprintf(`name:"%s_version"`, k)),
 			),
 		))
