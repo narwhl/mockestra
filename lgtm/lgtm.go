@@ -13,11 +13,14 @@ import (
 )
 
 const (
-	Tag      = "lgtm"
-	Image    = "grafana/otel-lgtm"
-	Port     = "3000/tcp"
-	HttpPort = "4318/tcp"
-	GrpcPort = "4317/tcp"
+	Tag            = "lgtm"
+	Image          = "grafana/otel-lgtm"
+	GrafanaPort    = "3000/tcp"
+	LokiPort       = "3100/tcp"
+	TempoPort      = "3200/tcp"
+	OtlpGrpcPort   = "4317/tcp"
+	OtlpHttpPort   = "4318/tcp"
+	PrometheusPort = "9090/tcp"
 
 	ContainerPrettyName = "LGTM"
 )
@@ -35,9 +38,12 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Name:  fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
 			Image: fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{
-				Port,
-				HttpPort,
-				GrpcPort,
+				GrafanaPort,
+				LokiPort,
+				TempoPort,
+				OtlpGrpcPort,
+				OtlpHttpPort,
+				PrometheusPort,
 			},
 			WaitingFor: wait.ForHTTP("/").WithPort("3000"),
 		},
@@ -69,9 +75,12 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 		OnStart: func(ctx context.Context) error {
 
 			portLabels := map[string]string{
-				Port:     "dashboard",
-				GrpcPort: "otlp (gRPC)",
-				HttpPort: "otlp (HTTP)",
+				GrafanaPort:    "grafana",
+				LokiPort:       "loki",
+				TempoPort:      "tempo",
+				OtlpGrpcPort:   "otlp (gRPC)",
+				OtlpHttpPort:   "otlp (HTTP)",
+				PrometheusPort: "prometheus",
 			}
 			var ports []any
 			for port, label := range portLabels {
