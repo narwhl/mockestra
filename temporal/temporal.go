@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
@@ -34,10 +35,12 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
 			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port, UIPort},
-			WaitingFor:   wait.ForHTTP("/").WithPort(UIPort),
-			Entrypoint:   []string{"/usr/local/bin/temporal"},
-			Cmd:          []string{"server", "start-dev", "--ip", "0.0.0.0"},
-			Env:          make(map[string]string),
+			WaitingFor: wait.ForHTTP("/").WithPort(UIPort).WithStatusCodeMatcher(func(status int) bool {
+				return status == http.StatusOK
+			}),
+			Entrypoint: []string{"/usr/local/bin/temporal"},
+			Cmd:        []string{"server", "start-dev", "--ip", "0.0.0.0"},
+			Env:        make(map[string]string),
 		},
 		Started: true,
 	}

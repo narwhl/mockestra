@@ -45,7 +45,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 				OtlpHttpPort,
 				PrometheusPort,
 			},
-			WaitingFor: wait.ForHTTP("/").WithPort("3000"),
+			WaitingFor: wait.ForLog(".*The OpenTelemetry collector and the Grafana LGTM stack are up and running.*\\s").AsRegexp().WithOccurrence(1),
 		},
 		Started: true,
 	}

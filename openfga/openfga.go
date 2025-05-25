@@ -3,11 +3,15 @@ package openfga
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"strings"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/fx"
 )
 
@@ -38,6 +42,19 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			},
 			Cmd: []string{"run"},
 			Env: map[string]string{},
+			WaitingFor: wait.ForAll(
+				wait.ForHTTP("/healthz").WithPort(HttpPort).WithResponseMatcher(func(r io.Reader) bool {
+					bs, err := io.ReadAll(r)
+					if err != nil {
+						return false
+					}
+
+					return (strings.Contains(string(bs), "SERVING"))
+				}),
+				wait.ForHTTP("/playground").WithPort(PlaygroundPort).WithStatusCodeMatcher(func(status int) bool {
+					return status == http.StatusOK
+				}),
+			),
 		},
 		Started: true,
 	}
@@ -109,4 +126,3 @@ var Module = mockestra.BuildContainerModule(
 		),
 	),
 )
-

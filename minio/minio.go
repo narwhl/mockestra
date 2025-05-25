@@ -7,6 +7,7 @@ import (
 
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/fx"
 )
 
@@ -42,9 +43,10 @@ type RequestParams struct {
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:  fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
-			Image: fmt.Sprintf("%s:%s", Image, p.Version),
-			Cmd:   []string{"server", "/data"},
+			Name:       fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image:      fmt.Sprintf("%s:%s", Image, p.Version),
+			Cmd:        []string{"server", "/data"},
+			WaitingFor: wait.ForHTTP("/minio/health/live").WithPort(Port),
 			ExposedPorts: []string{
 				Port,
 				ConsolePort,
