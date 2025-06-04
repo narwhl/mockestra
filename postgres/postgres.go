@@ -39,7 +39,8 @@ func WithMigration(fn migration) testcontainers.CustomizeRequestOption {
 					}
 					return fn(
 						fmt.Sprintf(
-							"postgres://postgres:%s@%s/%s?sslmode=disable",
+							"postgres://%s:%s@%s/%s?sslmode=disable",
+							req.Env["POSTGRES_USER"],
 							req.Env["POSTGRES_PASSWORD"],
 							addr,
 							req.Env["POSTGRES_DB"],
