@@ -109,14 +109,9 @@ func TestWithExtraDatabase(t *testing.T) {
 	}
 
 	sql := string(content)
-	if !(contains(sql, "CREATE USER extrauser WITH PASSWORD 'extrapass';") &&
-		contains(sql, "CREATE DATABASE extradb WITH OWNER extrauser;") &&
-		contains(sql, "GRANT ALL PRIVILEGES ON DATABASE extradb TO extrauser;")) {
+	if !(strings.Contains(sql, "CREATE USER extrauser WITH PASSWORD 'extrapass';") &&
+		strings.Contains(sql, "CREATE DATABASE extradb WITH OWNER extrauser;") &&
+		strings.Contains(sql, "GRANT ALL PRIVILEGES ON DATABASE extradb TO extrauser;")) {
 		t.Errorf("Init script does not contain expected SQL, got:\n%s", sql)
 	}
-}
-
-// contains is a helper for substring check
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
 }
