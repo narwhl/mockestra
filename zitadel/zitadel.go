@@ -99,6 +99,7 @@ func WithAdminUser(username, password string) testcontainers.CustomizeRequestOpt
 	return func(req *testcontainers.GenericContainerRequest) error {
 		req.Env["ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME"] = username
 		req.Env["ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD"] = password
+		req.Env["ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED"] = "false"
 		return nil
 	}
 }
