@@ -2,12 +2,16 @@ package postgres_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/narwhl/mockestra/postgres"
 	"github.com/testcontainers/testcontainers-go"
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxtest"
 )
 
 // mockContainer implements testcontainers.Container for Endpoint mocking
@@ -114,4 +118,24 @@ func TestWithExtraDatabase(t *testing.T) {
 		strings.Contains(sql, "GRANT ALL PRIVILEGES ON DATABASE extradb TO extrauser;")) {
 		t.Errorf("Init script does not contain expected SQL, got:\n%s", sql)
 	}
+}
+
+func TestPostgresModule(t *testing.T) {
+	app := fxtest.New(
+		t,
+		fx.Supply(
+			fx.Annotate(
+				"latest",
+				fx.ResultTags(`name:"postgres_version"`),
+			),
+		),
+		fx.Supply(fx.Annotate(
+			fmt.Sprintf("postgres-test-%x", time.Now().Unix()),
+			fx.ResultTags(`name:"prefix"`),
+		)),
+		postgres.Module(),
+	)
+
+	app.RequireStart()
+	defer app.RequireStop()
 }
