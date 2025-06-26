@@ -74,7 +74,7 @@ type ContainerParams struct {
 func Actualize(p ContainerParams) (testcontainers.Container, error) {
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create %s container: %w", ContainerPrettyName, err)
 	}
 
 	p.Lifecycle.Append(fx.Hook{
