@@ -9,6 +9,7 @@ require (
 	github.com/docker/go-connections v0.5.0
 	github.com/ory/hydra-client-go v1.11.8
 	github.com/testcontainers/testcontainers-go v0.37.0
+	github.com/testcontainers/testcontainers-go/modules/nats v0.37.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.37.0
 	github.com/zitadel/zitadel-go/v3 v3.5.1
 	go.uber.org/fx v1.24.0

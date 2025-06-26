@@ -1,0 +1,31 @@
+package nats_test
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/narwhl/mockestra/nats"
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxtest"
+)
+
+func TestNATSModule(t *testing.T) {
+	app := fxtest.New(
+		t,
+		fx.Supply(
+			fx.Annotate(
+				"latest",
+				fx.ResultTags(`name:"nats_version"`),
+			),
+		),
+		fx.Supply(fx.Annotate(
+			fmt.Sprintf("nats-test-%x", time.Now().Unix()),
+			fx.ResultTags(`name:"prefix"`),
+		)),
+		nats.Module(),
+	)
+
+	app.RequireStart()
+	defer app.RequireStop()
+}
