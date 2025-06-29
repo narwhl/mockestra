@@ -55,8 +55,8 @@ func WithMigration(fn migration) testcontainers.CustomizeRequestOption {
 type RequestParams struct {
 	fx.In
 	Prefix  string                               `name:"prefix"`
-	Version string                               `name:"postgres_version"`
-	Opts    []testcontainers.ContainerCustomizer `group:"postgres"`
+	Version string                               `name:"timescaledb_version"`
+	Opts    []testcontainers.ContainerCustomizer `group:"timescaledb"`
 }
 
 // New is a constructor that returns a testcontainers.GenericContainerRequest
