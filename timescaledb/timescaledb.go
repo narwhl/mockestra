@@ -1,10 +1,9 @@
-package postgres
+package timescaledb
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
@@ -13,11 +12,11 @@ import (
 )
 
 const (
-	Tag   = "postgres"
-	Image = "postgres"
+	Tag   = "timescaledb"
+	Image = "timescale/timescaledb"
 	Port  = "5432/tcp"
 
-	ContainerPrettyName = "Postgres"
+	ContainerPrettyName = "TimescaleDB"
 )
 
 var (
@@ -51,25 +50,6 @@ func WithMigration(fn migration) testcontainers.CustomizeRequestOption {
 		})
 		return nil
 	}
-}
-
-func WithExtraDatabase(databaseName, username, password string) testcontainers.CustomizeRequestOption {
-	initScript := fmt.Sprintf(`
-CREATE USER %[2]s WITH PASSWORD '%[3]s';
-CREATE DATABASE %[1]s WITH OWNER %[2]s;
-GRANT ALL PRIVILEGES ON DATABASE %[1]s TO %[2]s;
-`, databaseName, username, password)
-	tempInitFile, err := os.CreateTemp("", fmt.Sprintf("%s-db-init.*.sql", databaseName))
-	if err != nil {
-		slog.Error("failed to create temp init file", "err", err)
-		return nil
-	}
-	defer tempInitFile.Close()
-	if _, err := tempInitFile.Write([]byte(initScript)); err != nil {
-		slog.Error("failed to write to temp init file", "err", err)
-		return nil
-	}
-	return postgres.WithInitScripts(tempInitFile.Name())
 }
 
 type RequestParams struct {
@@ -106,7 +86,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 type ContainerParams struct {
 	fx.In
 	Lifecycle fx.Lifecycle
-	Request   *testcontainers.GenericContainerRequest `name:"postgres"`
+	Request   *testcontainers.GenericContainerRequest `name:"timescaledb"`
 }
 
 // Actualize is a constructor that returns a testcontainers.Container
@@ -147,11 +127,11 @@ var Module = mockestra.BuildContainerModule(
 	fx.Provide(
 		fx.Annotate(
 			New,
-			fx.ResultTags(`name:"postgres"`),
+			fx.ResultTags(`name:"timescaledb"`),
 		),
 		fx.Annotate(
 			Actualize,
-			fx.ResultTags(`name:"postgres"`),
+			fx.ResultTags(`name:"timescaledb"`),
 		),
 	),
 )
