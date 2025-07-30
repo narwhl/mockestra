@@ -50,7 +50,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 				"server",
 				"/data",
 				"--console-address",
-				fmt.Sprintf(":%s", strings.Replace(ConsolePort, "/tcp", "", 1)),
+				fmt.Sprintf(":%s", strings.TrimSuffix(ConsolePort, "/tcp")),
 			},
 			WaitingFor: wait.ForHTTP("/minio/health/live").WithPort(Port),
 			ExposedPorts: []string{

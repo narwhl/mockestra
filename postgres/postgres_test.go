@@ -155,7 +155,7 @@ func TestPostgresModule(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to connect to postgres: %v", err)
 			}
-			defer conn.Close(context.Background())
+			defer conn.Close(t.Context())
 		}),
 	)
 
