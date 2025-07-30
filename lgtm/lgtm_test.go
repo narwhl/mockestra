@@ -5,7 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/narwhl/mockestra/lgtm"
+	container "github.com/narwhl/mockestra/lgtm"
+	"github.com/testcontainers/testcontainers-go"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
 )
@@ -23,9 +24,17 @@ func TestLGTMModule(t *testing.T) {
 			fmt.Sprintf("lgtm-test-%x", time.Now().Unix()),
 			fx.ResultTags(`name:"prefix"`),
 		)),
-		lgtm.Module(),
+		container.Module(),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"lgtm"`
+		}) {
+			t.Log("To be implemented: LGTM module test")
+		}),
 	)
 
 	app.RequireStart()
-	defer app.RequireStop()
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
 }

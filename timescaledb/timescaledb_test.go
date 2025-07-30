@@ -93,8 +93,16 @@ func TestTimescaleDBModule(t *testing.T) {
 			fx.ResultTags(`name:"prefix"`),
 		)),
 		timescaledb.Module(),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"timescaledb"`
+		}) {
+			t.Log("To be implemented: TimescaleDB module test")
+		}),
 	)
 
 	app.RequireStart()
-	defer app.RequireStop()
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
 }

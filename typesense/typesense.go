@@ -71,7 +71,7 @@ type ContainerParams struct {
 func Actualize(p ContainerParams) (testcontainers.Container, error) {
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
 	if err != nil {
-		return nil, fmt.Errorf("an error occurred while instantiating redis container: %w", err)
+		return nil, fmt.Errorf("an error occurred while instantiating typesense container: %w", err)
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
