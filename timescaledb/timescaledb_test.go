@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/narwhl/mockestra/timescaledb"
+	"github.com/jackc/pgx/v5"
+	container "github.com/narwhl/mockestra/timescaledb"
 	"github.com/testcontainers/testcontainers-go"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
@@ -47,7 +48,7 @@ func TestWithMigration(t *testing.T) {
 		},
 	}
 
-	opt := timescaledb.WithMigration(migrationFn)
+	opt := container.WithMigration(migrationFn)
 	err := opt.Customize(req)
 	if err != nil {
 		t.Fatalf("Customize failed: %v", err)
@@ -93,16 +94,39 @@ func TestTimescaleDBModule(t *testing.T) {
 			fmt.Sprintf("timescaledb-test-%x", time.Now().Unix()),
 			fx.ResultTags(`name:"prefix"`),
 		)),
-		timescaledb.Module(
-			timescaledb.WithUsername("testuser"),
-			timescaledb.WithPassword("testpass"),
-			timescaledb.WithDatabase("testdb"),
+		container.Module(
+			container.WithUsername("testuser"),
+			container.WithPassword("testpass"),
+			container.WithDatabase("testdb"),
 		),
 		fx.Invoke(func(params struct {
 			fx.In
 			Container testcontainers.Container `name:"timescaledb"`
 		}) {
-			t.Log("To be implemented: TimescaleDB module test")
+			endpoint, err := params.Container.PortEndpoint(t.Context(), container.Port, "")
+			if err != nil {
+				t.Fatalf("Failed to get container endpoint: %v", err)
+			}
+			conn, err := pgx.Connect(
+				t.Context(),
+				fmt.Sprintf(
+					"postgres://testuser:testpass@%s/testdb?sslmode=disable",
+					endpoint),
+			)
+			if err != nil {
+				t.Fatalf("Failed to connect to TimescaleDB: %v", err)
+			}
+			defer conn.Close(t.Context())
+			statements := `
+				CREATE TABLE ts_data (
+					time TIMESTAMPTZ NOT NULL
+				);
+				SELECT create_hypertable('ts_data', 'time');
+			`
+			_, err = conn.Exec(t.Context(), statements)
+			if err != nil {
+				t.Fatalf("Failed to execute statements: %v", err)
+			}
 		}),
 	)
 
