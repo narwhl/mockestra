@@ -9,6 +9,7 @@ require (
 	github.com/docker/go-connections v0.5.0
 	github.com/jackc/pgx/v5 v5.5.4
 	github.com/minio/minio-go/v7 v7.0.95
+	github.com/nats-io/nats.go v1.33.1
 	github.com/openfga/go-sdk v0.7.1
 	github.com/ory/hydra-client-go v1.11.8
 	github.com/testcontainers/testcontainers-go v0.37.0
@@ -75,6 +76,8 @@ require (
 	github.com/moby/term v0.5.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
+	github.com/nats-io/nkeys v0.4.7 // indirect
+	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nexus-rpc/sdk-go v0.3.0 // indirect
 	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
