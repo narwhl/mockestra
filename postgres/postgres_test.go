@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/narwhl/mockestra/postgres"
+	"github.com/jackc/pgx/v5"
+	container "github.com/narwhl/mockestra/postgres"
 	"github.com/testcontainers/testcontainers-go"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
@@ -49,7 +50,7 @@ func TestWithMigration(t *testing.T) {
 		},
 	}
 
-	opt := postgres.WithMigration(migrationFn)
+	opt := container.WithMigration(migrationFn)
 	err := opt.Customize(req)
 	if err != nil {
 		t.Fatalf("Customize failed: %v", err)
@@ -87,7 +88,7 @@ func TestWithExtraDatabase(t *testing.T) {
 	// 3. Apply the option to a GenericContainerRequest.
 	// 4. Check that the InitScripts field is set and points to a file that contains the expected SQL.
 
-	opt := postgres.WithExtraDatabase("extradb", "extrauser", "extrapass")
+	opt := container.WithExtraDatabase("extradb", "extrauser", "extrapass")
 	if opt == nil {
 		t.Fatal("WithExtraDatabase returned nil")
 	}
@@ -123,6 +124,7 @@ func TestWithExtraDatabase(t *testing.T) {
 func TestPostgresModule(t *testing.T) {
 	app := fxtest.New(
 		t,
+		fx.NopLogger,
 		fx.Supply(
 			fx.Annotate(
 				"latest",
@@ -133,9 +135,32 @@ func TestPostgresModule(t *testing.T) {
 			fmt.Sprintf("postgres-test-%x", time.Now().Unix()),
 			fx.ResultTags(`name:"prefix"`),
 		)),
-		postgres.Module(),
+		container.Module(
+			container.WithUsername("testuser"),
+			container.WithPassword("testpass"),
+			container.WithDatabase("testdb"),
+		),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"postgres"`
+		}) {
+			endpoint, err := params.Container.PortEndpoint(t.Context(), container.Port, "")
+			if err != nil {
+				t.Errorf("failed to get endpoint: %v", err)
+			}
+			conn, err := pgx.Connect(t.Context(), fmt.Sprintf(
+				"postgres://%s:%s@%s/%s?sslmode=disable",
+				"testuser", "testpass", endpoint, "testdb",
+			))
+			if err != nil {
+				t.Errorf("failed to connect to postgres: %v", err)
+			}
+			defer conn.Close(t.Context())
+		}),
 	)
 
 	app.RequireStart()
-	defer app.RequireStop()
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
 }

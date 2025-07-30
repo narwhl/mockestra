@@ -82,6 +82,7 @@ func TestWithMigration(t *testing.T) {
 func TestTimescaleDBModule(t *testing.T) {
 	app := fxtest.New(
 		t,
+		fx.NopLogger,
 		fx.Supply(
 			fx.Annotate(
 				"latest-pg17",
@@ -92,9 +93,21 @@ func TestTimescaleDBModule(t *testing.T) {
 			fmt.Sprintf("timescaledb-test-%x", time.Now().Unix()),
 			fx.ResultTags(`name:"prefix"`),
 		)),
-		timescaledb.Module(),
+		timescaledb.Module(
+			timescaledb.WithUsername("testuser"),
+			timescaledb.WithPassword("testpass"),
+			timescaledb.WithDatabase("testdb"),
+		),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"timescaledb"`
+		}) {
+			t.Log("To be implemented: TimescaleDB module test")
+		}),
 	)
 
 	app.RequireStart()
-	defer app.RequireStop()
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
 }

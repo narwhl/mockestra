@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/narwhl/mockestra/temporal"
+	container "github.com/narwhl/mockestra/temporal"
+	"github.com/testcontainers/testcontainers-go"
+	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
 )
@@ -13,6 +15,7 @@ import (
 func TestTemporalModule(t *testing.T) {
 	app := fxtest.New(
 		t,
+		fx.NopLogger,
 		fx.Supply(
 			fx.Annotate(
 				"latest",
@@ -23,9 +26,27 @@ func TestTemporalModule(t *testing.T) {
 			fmt.Sprintf("temporal-test-%x", time.Now().Unix()),
 			fx.ResultTags(`name:"prefix"`),
 		)),
-		temporal.Module(),
+		container.Module(),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"temporal"`
+		}) {
+			endpoint, err := params.Container.PortEndpoint(t.Context(), container.Port, "")
+			if err != nil {
+				t.Errorf("failed to get endpoint: %v", err)
+			}
+			temporalClient, err := client.Dial(client.Options{
+				HostPort: endpoint,
+			})
+			if err != nil {
+				t.Errorf("failed to create temporal client: %v", err)
+			}
+			defer temporalClient.Close()
+		}),
 	)
 
 	app.RequireStart()
-	defer app.RequireStop()
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
 }
