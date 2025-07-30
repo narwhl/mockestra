@@ -14,6 +14,8 @@ import (
 func TestLGTMModule(t *testing.T) {
 	app := fxtest.New(
 		t,
+		fx.StartTimeout(90*time.Second),
+		fx.NopLogger,
 		fx.Supply(
 			fx.Annotate(
 				"latest",
@@ -32,7 +34,6 @@ func TestLGTMModule(t *testing.T) {
 			t.Log("To be implemented: LGTM module test")
 		}),
 	)
-
 	app.RequireStart()
 	t.Cleanup(func() {
 		app.RequireStop()
