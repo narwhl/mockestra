@@ -113,6 +113,8 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 	return c, nil
 }
 
+var WithPostReadyHook = mockestra.WithPostReadyHook
+
 var Module = mockestra.BuildContainerModule(
 	"openfga",
 	fx.Provide(
