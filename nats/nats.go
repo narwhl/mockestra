@@ -43,7 +43,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			ExposedPorts: []string{Port, HttpPort, RoutePort},
 			Env:          map[string]string{},
 			Cmd:          []string{"-DV", "-js"},
-			WaitingFor:   wait.ForLog("Listening for client connections on 0.0.0.0:4222"),
+			WaitingFor:   wait.ForListeningPort(Port),
 		},
 		Started: true,
 	}
