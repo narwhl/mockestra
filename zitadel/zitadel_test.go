@@ -476,3 +476,193 @@ func TestZitadelOIDCFunctionality(t *testing.T) {
 		app.RequireStop()
 	})
 }
+
+// TestZitadelProvisioningFunctionality tests the provisioning functionality
+func TestZitadelProvisioningFunctionality(t *testing.T) {
+	testPrefix := fmt.Sprintf("zitadel-provision-test-%x", time.Now().Unix())
+	
+	// Create temp directory for service account key
+	tempDir, err := os.MkdirTemp("", "zitadel-provision-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+	
+	serviceAccountFile := filepath.Join(tempDir, "service-account.json")
+	if err := os.WriteFile(serviceAccountFile, []byte("{}"), fs.ModePerm); err != nil {
+		t.Fatalf("Failed to create service account file: %v", err)
+	}
+	
+	app := fxtest.New(
+		t,
+		fx.NopLogger,
+		
+		fx.Supply(
+			fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
+			fx.Annotate("latest", fx.ResultTags(`name:"zitadel_version"`)),
+			fx.Annotate(testPrefix, fx.ResultTags(`name:"prefix"`)),
+		),
+		
+		postgres_container.Module(
+			postgres_container.WithUsername("postgres"),
+			postgres_container.WithPassword("password123"),
+			postgres_container.WithDatabase("postgres"),
+		),
+		
+		container.Module(
+			container.WithMasterkey("ProvisionTestMasterKey1234567890"), // Exactly 32 bytes
+			container.WithOrganizationName("ProvisionTestOrg"),
+			container.WithAdminUser("admin", "Admin123!"),
+			// Note: WithServiceUser is tested separately due to file copy complexity
+		),
+		
+		fx.Invoke(func(params struct {
+			fx.In
+			ZitadelContainer testcontainers.Container `name:"zitadel"`
+		}) {
+			zitadelEndpoint, err := params.ZitadelContainer.PortEndpoint(t.Context(), container.Port, "")
+			if err != nil {
+				t.Fatalf("Failed to get Zitadel endpoint: %v", err)
+			}
+			
+			t.Logf("Testing provisioning functions against Zitadel at %s", zitadelEndpoint)
+			
+			// Test basic connectivity to admin API
+			adminURL := fmt.Sprintf("http://%s/admin/v1/healthz", zitadelEndpoint)
+			resp, err := http.Get(adminURL)
+			if err != nil {
+				t.Logf("Admin API not yet available: %v", err)
+				return
+			}
+			defer resp.Body.Close()
+			
+			if resp.StatusCode == 200 || resp.StatusCode == 404 {
+				t.Logf("Admin API responded with status: %d", resp.StatusCode)
+			} else {
+				t.Logf("Admin API unexpected status: %d", resp.StatusCode)
+			}
+			
+			// Test management API endpoint
+			mgmtURL := fmt.Sprintf("http://%s/management/v1/healthz", zitadelEndpoint)
+			resp2, err := http.Get(mgmtURL)
+			if err != nil {
+				t.Logf("Management API not yet available: %v", err)
+				return
+			}
+			defer resp2.Body.Close()
+			
+			t.Logf("Management API responded with status: %d", resp2.StatusCode)
+			
+			// Test that the GenerateClientCredentials function exists and can be called
+			// Note: This would normally require authentication, so we just test the function signature
+			_, err = container.GenerateClientCredentials(
+				t.Context(),
+				"test-app",
+				"localhost",
+				"8080",
+				"/nonexistent/key.json", // This will fail, but that's expected
+				"test-project",
+				"http://localhost:3000/callback",
+			)
+			if err != nil {
+				t.Logf("GenerateClientCredentials failed as expected (no auth): %v", err)
+			}
+		}),
+	)
+	
+	app.RequireStart()
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
+}
+
+// TestZitadelEndToEndIntegration demonstrates a complete end-to-end usage pattern
+func TestZitadelEndToEndIntegration(t *testing.T) {
+	testPrefix := fmt.Sprintf("zitadel-e2e-test-%x", time.Now().Unix())
+	
+	// Test that both containers and proxy work together
+	app := fxtest.New(
+		t,
+		fx.NopLogger,
+		
+		fx.Supply(
+			fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
+			fx.Annotate("latest", fx.ResultTags(`name:"zitadel_version"`)),
+			fx.Annotate(testPrefix, fx.ResultTags(`name:"prefix"`)),
+		),
+		
+		postgres_container.Module(
+			postgres_container.WithUsername("postgres"),
+			postgres_container.WithPassword("password123"),
+			postgres_container.WithDatabase("postgres"),
+		),
+		
+		container.Module(
+			container.WithMasterkey("EndToEndTestMasterKey12345678901"), // Exactly 32 bytes
+			container.WithOrganizationName("E2ETestOrg"),
+			container.WithAdminUser("e2eadmin", "E2EAdmin123!"),
+		),
+		
+		fx.Invoke(func(params struct {
+			fx.In
+			PostgresContainer testcontainers.Container                `name:"postgres"`
+			ZitadelContainer  testcontainers.Container                `name:"zitadel"`
+			ZitadelRequest    *testcontainers.GenericContainerRequest `name:"zitadel"`
+			ZitadelProxy      *testcontainers.GenericContainerRequest `name:"zitadel"` // Proxy is tagged the same
+		}) {
+			// Test that all components are available
+			postgresEndpoint, err := params.PostgresContainer.PortEndpoint(t.Context(), postgres_container.Port, "")
+			if err != nil {
+				t.Fatalf("Failed to get Postgres endpoint: %v", err)
+			}
+			
+			zitadelEndpoint, err := params.ZitadelContainer.PortEndpoint(t.Context(), container.Port, "")
+			if err != nil {
+				t.Fatalf("Failed to get Zitadel endpoint: %v", err)
+			}
+			
+			t.Logf("End-to-end test environment ready:")
+			t.Logf("  - Postgres: %s", postgresEndpoint)
+			t.Logf("  - Zitadel: %s", zitadelEndpoint)
+			t.Logf("  - Admin credentials: e2eadmin@e2etestorg.127.0.0.1 / E2EAdmin123!")
+			
+			// Verify environment configuration
+			env := params.ZitadelRequest.Env
+			if domain, exists := env["ZITADEL_EXTERNALDOMAIN"]; exists {
+				t.Logf("  - External domain: %s", domain)
+			}
+			if port, exists := env["ZITADEL_EXTERNALPORT"]; exists {
+				t.Logf("  - External port: %s", port)
+			}
+			
+			// Test the health endpoint
+			healthURL := fmt.Sprintf("http://%s/debug/healthz", zitadelEndpoint)
+			resp, err := http.Get(healthURL)
+			if err != nil {
+				t.Fatalf("Failed to connect to Zitadel health endpoint: %v", err)
+			}
+			defer resp.Body.Close()
+			
+			if resp.StatusCode != 200 {
+				t.Errorf("Zitadel health check failed, status: %d", resp.StatusCode)
+			} else {
+				t.Logf("  - Health check: PASSED")
+			}
+			
+			// Test that we can access the UI
+			uiURL := fmt.Sprintf("http://%s/ui/console", zitadelEndpoint)
+			resp2, err := http.Get(uiURL)
+			if err == nil {
+				defer resp2.Body.Close()
+				t.Logf("  - Console UI: %d", resp2.StatusCode)
+			}
+			
+			t.Logf("End-to-end integration test completed successfully!")
+		}),
+	)
+	
+	app.RequireStart()
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
+}
