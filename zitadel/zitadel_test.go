@@ -37,14 +37,10 @@ func TestZitadelWithPostgres(t *testing.T) {
 				"latest", // postgres version
 				fx.ResultTags(`name:"postgres_version"`),
 			),
-		),
-		fx.Supply(
 			fx.Annotate(
-				"v4.0.0", // zitadel version
+				"latest", // zitadel version
 				fx.ResultTags(`name:"zitadel_version"`),
 			),
-		),
-		fx.Supply(
 			fx.Annotate(
 				testPrefix,
 				fx.ResultTags(`name:"prefix"`),
