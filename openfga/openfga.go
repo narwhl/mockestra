@@ -23,6 +23,13 @@ const (
 	ContainerPrettyName = "OpenFGA"
 )
 
+func WithPresharedKey(token string) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.Cmd = append(req.Cmd, "--authn-method=preshared", fmt.Sprintf("--authn-preshared-keys=\"%s\"", token))
+		return nil
+	}
+}
+
 type RequestParams struct {
 	fx.In
 	Prefix  string                               `name:"prefix"`
