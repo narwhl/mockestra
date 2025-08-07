@@ -95,8 +95,15 @@ func TestMinioModule_WithBucket(t *testing.T) {
 				t.Errorf("failed to list buckets: %v", err)
 				return
 			}
-			if len(buckets) == 0 || buckets[0].Name != expectedBucket {
-				t.Errorf("expected bucket 'test-bucket' to be created, got: %v", buckets)
+			found := false
+			for _, bucket := range buckets {
+				if bucket.Name == expectedBucket {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected bucket '%s' to be created, got: %v", expectedBucket, buckets)
 			}
 		}),
 	)
