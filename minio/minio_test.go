@@ -56,3 +56,60 @@ func TestMinioModule(t *testing.T) {
 		app.RequireStop()
 	})
 }
+
+func TestMinioModule_WithBucket(t *testing.T) {
+	expectedBucket := "test-bucket"
+	app := fxtest.New(
+		t,
+		fx.NopLogger,
+		fx.Supply(
+			fx.Annotate(
+				"latest",
+				fx.ResultTags(`name:"minio_version"`),
+			),
+		),
+		fx.Supply(fx.Annotate(
+			fmt.Sprintf("minio-test-%x", time.Now().Unix()),
+			fx.ResultTags(`name:"prefix"`),
+		)),
+		container.Module(
+			container.WithBucket(expectedBucket),
+		),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"minio"`
+		}) {
+			endpoint, err := params.Container.PortEndpoint(t.Context(), container.Port, "")
+			if err != nil {
+				t.Errorf("failed to get endpoint: %v", err)
+			}
+			client, err := minio.New(endpoint, &minio.Options{
+				Creds:  credentials.NewStaticV4("minioadmin", "minioadmin", ""),
+				Secure: false,
+			})
+			if err != nil {
+				t.Errorf("failed to create minio client: %v", err)
+			}
+			buckets, err := client.ListBuckets(t.Context())
+			if err != nil {
+				t.Errorf("failed to list buckets: %v", err)
+				return
+			}
+			found := false
+			for _, bucket := range buckets {
+				if bucket.Name == expectedBucket {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected bucket '%s' to be created, got: %v", expectedBucket, buckets)
+			}
+		}),
+	)
+
+	app.RequireStart()
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
+}

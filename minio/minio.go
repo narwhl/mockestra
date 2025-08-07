@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -24,6 +26,50 @@ const (
 type MinioCredentials struct {
 	AccessKeyID     string
 	SecretAccessKey string
+}
+
+func WithBucket(bucketName string) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
+			PostReadies: []testcontainers.ContainerHook{
+				func(ctx context.Context, ctr testcontainers.Container) error {
+					endpoint, err := ctr.PortEndpoint(ctx, Port, "")
+					if err != nil {
+						return fmt.Errorf("encounter error getting endpoint while creating bucket: %w", err)
+					}
+					var creds *credentials.Credentials
+					if accessKeyID, ok := req.Env["MINIO_ROOT_USER"]; ok {
+						if secretAccessKey, ok := req.Env["MINIO_ROOT_PASSWORD"]; ok {
+							creds = credentials.NewStaticV4(accessKeyID, secretAccessKey, "")
+						} else {
+							return fmt.Errorf("missing MINIO_ROOT_PASSWORD environment variable")
+						}
+					} else {
+						creds = credentials.NewStaticV4("minioadmin", "minioadmin", "")
+					}
+					client, err := minio.New(endpoint, &minio.Options{
+						Creds:  creds,
+						Secure: false,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to create minio client: %w", err)
+					}
+					exists, err := client.BucketExists(ctx, bucketName)
+					if err != nil {
+						return fmt.Errorf("failed to check if bucket %s exists: %w", bucketName, err)
+					}
+					if !exists {
+						err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+						if err != nil {
+							return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
+						}
+					}
+					return nil
+				},
+			},
+		})
+		return nil
+	}
 }
 
 func WithObjectStorageCredentials(credentials MinioCredentials) testcontainers.CustomizeRequestOption {
