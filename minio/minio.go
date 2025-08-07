@@ -54,9 +54,15 @@ func WithBucket(bucketName string) testcontainers.CustomizeRequestOption {
 					if err != nil {
 						return fmt.Errorf("failed to create minio client: %w", err)
 					}
-					err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+					exists, err := client.BucketExists(ctx, bucketName)
 					if err != nil {
-						return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
+						return fmt.Errorf("failed to check if bucket %s exists: %w", bucketName, err)
+					}
+					if !exists {
+						err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+						if err != nil {
+							return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
+						}
 					}
 					return nil
 				},
