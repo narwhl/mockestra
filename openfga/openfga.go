@@ -2,6 +2,7 @@ package openfga
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,9 +11,14 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
+	openfga "github.com/openfga/go-sdk"
+	"github.com/openfga/go-sdk/client"
+	"github.com/openfga/go-sdk/credentials"
+	language "github.com/openfga/language/pkg/go/transformer"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/fx"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -22,6 +28,73 @@ const (
 	GrpcPort            = "8081/tcp"
 	ContainerPrettyName = "OpenFGA"
 )
+
+type callback func(string, string) error
+
+func WithAuthorizationModel(model string, cb callback) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
+			PostReadies: []testcontainers.ContainerHook{
+				func(ctx context.Context, container testcontainers.Container) error {
+					token := strings.TrimSuffix(
+						strings.TrimPrefix(req.Cmd[len(req.Cmd)-1], "--authn-preshared-keys=\""), "\"",
+					)
+					fmt.Println("token", token)
+					addr, err := container.PortEndpoint(ctx, HttpPort, "")
+					if err != nil {
+						return fmt.Errorf("encounter error getting addr: %w", err)
+					}
+					parsedAuthModel, err := language.TransformDSLToProto(model)
+					if err != nil {
+						return fmt.Errorf("failed to transform due to %w", err)
+					}
+
+					bytes, err := protojson.Marshal(parsedAuthModel)
+					if err != nil {
+						return fmt.Errorf("failed to transform due to %w", err)
+					}
+
+					jsonAuthModel := openfga.AuthorizationModel{}
+					err = json.Unmarshal(bytes, &jsonAuthModel)
+					if err != nil {
+						return fmt.Errorf("failed to transform due to %w", err)
+					}
+					fmt.Println("jsonAuthModel", jsonAuthModel)
+					fgaClient, err := client.NewSdkClient(&client.ClientConfiguration{
+						ApiUrl: fmt.Sprintf("http://%s", addr),
+						Credentials: &credentials.Credentials{
+							Method: credentials.CredentialsMethodApiToken,
+							Config: &credentials.Config{
+								ApiToken: token,
+							},
+						},
+					})
+					if err != nil {
+						return fmt.Errorf("failed to create OpenFGA client: %w", err)
+					}
+					writeAuthModelReq := openfga.NewWriteAuthorizationModelRequest(
+						jsonAuthModel.TypeDefinitions,
+						jsonAuthModel.SchemaVersion,
+					)
+					storeCreationResp, err := fgaClient.CreateStore(ctx).Body(client.ClientCreateStoreRequest{Name: "default"}).Execute()
+					if err != nil {
+						return fmt.Errorf("failed to create OpenFGA store: %w", err)
+					}
+					authModelCreationResp, err := fgaClient.WriteAuthorizationModel(ctx).
+						Body(*writeAuthModelReq).
+						Options(client.ClientWriteAuthorizationModelOptions{
+							StoreId: &storeCreationResp.Id,
+						}).Execute()
+					if err != nil {
+						return fmt.Errorf("failed to create OpenFGA client: %w", err)
+					}
+					return cb(storeCreationResp.Id, authModelCreationResp.AuthorizationModelId)
+				},
+			},
+		})
+		return nil
+	}
+}
 
 func WithPresharedKey(token string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
