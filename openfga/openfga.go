@@ -36,10 +36,6 @@ func WithAuthorizationModel(model string, cb callback) testcontainers.CustomizeR
 		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
 			PostReadies: []testcontainers.ContainerHook{
 				func(ctx context.Context, container testcontainers.Container) error {
-					token := strings.TrimSuffix(
-						strings.TrimPrefix(req.Cmd[len(req.Cmd)-1], "--authn-preshared-keys=\""), "\"",
-					)
-					fmt.Println("token", token)
 					addr, err := container.PortEndpoint(ctx, HttpPort, "")
 					if err != nil {
 						return fmt.Errorf("encounter error getting addr: %w", err)
@@ -59,13 +55,12 @@ func WithAuthorizationModel(model string, cb callback) testcontainers.CustomizeR
 					if err != nil {
 						return fmt.Errorf("failed to transform due to %w", err)
 					}
-					fmt.Println("jsonAuthModel", jsonAuthModel)
 					fgaClient, err := client.NewSdkClient(&client.ClientConfiguration{
 						ApiUrl: fmt.Sprintf("http://%s", addr),
 						Credentials: &credentials.Credentials{
 							Method: credentials.CredentialsMethodApiToken,
 							Config: &credentials.Config{
-								ApiToken: token,
+								ApiToken: req.Env["OPENFGA_AUTHN_PRESHARED_KEYS"],
 							},
 						},
 					})
@@ -86,7 +81,7 @@ func WithAuthorizationModel(model string, cb callback) testcontainers.CustomizeR
 							StoreId: &storeCreationResp.Id,
 						}).Execute()
 					if err != nil {
-						return fmt.Errorf("failed to create OpenFGA client: %w", err)
+						return fmt.Errorf("failed to write authorization model: %w", err)
 					}
 					return cb(storeCreationResp.Id, authModelCreationResp.AuthorizationModelId)
 				},
@@ -98,7 +93,8 @@ func WithAuthorizationModel(model string, cb callback) testcontainers.CustomizeR
 
 func WithPresharedKey(token string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
-		req.Cmd = append(req.Cmd, "--authn-method=preshared", fmt.Sprintf("--authn-preshared-keys=\"%s\"", token))
+		req.Env["OPENFGA_AUTHN_METHOD"] = "preshared"
+		req.Env["OPENFGA_AUTHN_PRESHARED_KEYS"] = token
 		return nil
 	}
 }
