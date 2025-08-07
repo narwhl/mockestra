@@ -2,6 +2,7 @@ package openfga
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,9 +11,14 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
+	openfga "github.com/openfga/go-sdk"
+	"github.com/openfga/go-sdk/client"
+	"github.com/openfga/go-sdk/credentials"
+	language "github.com/openfga/language/pkg/go/transformer"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/fx"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -23,9 +29,72 @@ const (
 	ContainerPrettyName = "OpenFGA"
 )
 
+type callback func(string, string) error
+
+func WithAuthorizationModel(model string, cb callback) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
+			PostReadies: []testcontainers.ContainerHook{
+				func(ctx context.Context, container testcontainers.Container) error {
+					addr, err := container.PortEndpoint(ctx, HttpPort, "")
+					if err != nil {
+						return fmt.Errorf("encounter error getting addr: %w", err)
+					}
+					parsedAuthModel, err := language.TransformDSLToProto(model)
+					if err != nil {
+						return fmt.Errorf("failed to transform due to %w", err)
+					}
+
+					bytes, err := protojson.Marshal(parsedAuthModel)
+					if err != nil {
+						return fmt.Errorf("failed to transform due to %w", err)
+					}
+
+					jsonAuthModel := openfga.AuthorizationModel{}
+					err = json.Unmarshal(bytes, &jsonAuthModel)
+					if err != nil {
+						return fmt.Errorf("failed to transform due to %w", err)
+					}
+					fgaClient, err := client.NewSdkClient(&client.ClientConfiguration{
+						ApiUrl: fmt.Sprintf("http://%s", addr),
+						Credentials: &credentials.Credentials{
+							Method: credentials.CredentialsMethodApiToken,
+							Config: &credentials.Config{
+								ApiToken: req.Env["OPENFGA_AUTHN_PRESHARED_KEYS"],
+							},
+						},
+					})
+					if err != nil {
+						return fmt.Errorf("failed to create OpenFGA client: %w", err)
+					}
+					writeAuthModelReq := openfga.NewWriteAuthorizationModelRequest(
+						jsonAuthModel.TypeDefinitions,
+						jsonAuthModel.SchemaVersion,
+					)
+					storeCreationResp, err := fgaClient.CreateStore(ctx).Body(client.ClientCreateStoreRequest{Name: "default"}).Execute()
+					if err != nil {
+						return fmt.Errorf("failed to create OpenFGA store: %w", err)
+					}
+					authModelCreationResp, err := fgaClient.WriteAuthorizationModel(ctx).
+						Body(*writeAuthModelReq).
+						Options(client.ClientWriteAuthorizationModelOptions{
+							StoreId: &storeCreationResp.Id,
+						}).Execute()
+					if err != nil {
+						return fmt.Errorf("failed to write authorization model: %w", err)
+					}
+					return cb(storeCreationResp.Id, authModelCreationResp.AuthorizationModelId)
+				},
+			},
+		})
+		return nil
+	}
+}
+
 func WithPresharedKey(token string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
-		req.Cmd = append(req.Cmd, "--authn-method=preshared", fmt.Sprintf("--authn-preshared-keys=\"%s\"", token))
+		req.Env["OPENFGA_AUTHN_METHOD"] = "preshared"
+		req.Env["OPENFGA_AUTHN_PRESHARED_KEYS"] = token
 		return nil
 	}
 }
