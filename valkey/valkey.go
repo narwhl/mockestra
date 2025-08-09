@@ -53,10 +53,16 @@ type ContainerParams struct {
 	Request   *testcontainers.GenericContainerRequest `name:"valkey"`
 }
 
-func Actualize(p ContainerParams) (testcontainers.Container, error) {
+type Result struct {
+	fx.Out
+	Container      testcontainers.Container `name:"valkey"`
+	ContainerGroup testcontainers.Container `group:"containers"`
+}
+
+func Actualize(p ContainerParams) (Result, error) {
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
 	if err != nil {
-		return nil, fmt.Errorf("an error occurred while instantiating %s container: %w", ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("an error occurred while instantiating %s container: %w", ContainerPrettyName, err)
 	}
 
 	p.Lifecycle.Append(fx.Hook{
@@ -78,7 +84,10 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 			return err
 		},
 	})
-	return c, nil
+	return Result{
+		Container:      c,
+		ContainerGroup: c,
+	}, nil
 }
 
 var WithPostReadyHook = mockestra.WithPostReadyHook
@@ -90,9 +99,6 @@ var Module = mockestra.BuildContainerModule(
 			New,
 			fx.ResultTags(`name:"valkey"`),
 		),
-		fx.Annotate(
-			Actualize,
-			fx.ResultTags(`name:"valkey"`),
-		),
+		Actualize,
 	),
 )

@@ -263,27 +263,33 @@ type ContainerParams struct {
 	Request                  *testcontainers.GenericContainerRequest `name:"kratos"`
 }
 
-func Actualize(p ContainerParams) (testcontainers.Container, error) {
+type Result struct {
+	fx.Out
+	Container      testcontainers.Container `name:"kratos"`
+	ContainerGroup testcontainers.Container `group:"containers"`
+}
+
+func Actualize(p ContainerParams) (Result, error) {
 	hydraIP, err := p.HydraContainer.ContainerIP(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s container IP: %w", hydra.ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("failed to get %s container IP: %w", hydra.ContainerPrettyName, err)
 	}
 	_, hydraAdminPort := nat.SplitProtoPort(hydra.AdminPort)
 
 	mailslurperIP, err := p.MailslurperContainer.ContainerIP(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s container IP: %w", mailslurper.ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("failed to get %s container IP: %w", mailslurper.ContainerPrettyName, err)
 	}
 	_, mailslurperPort := nat.SplitProtoPort(mailslurper.SMTPPort)
 
 	postgresIP, err := p.PostgresContainer.ContainerIP(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s container IP: %w", postgres.ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("failed to get %s container IP: %w", postgres.ContainerPrettyName, err)
 	}
 	_, postgresPort := nat.SplitProtoPort(postgres.Port)
 
 	if err := WithHydraAdminURL(fmt.Sprintf("http://%s:%s", hydraIP, hydraAdminPort)).Customize(p.Request); err != nil {
-		return nil, fmt.Errorf("failed to set hydra url: %w", err)
+		return Result{}, fmt.Errorf("failed to set hydra url: %w", err)
 	}
 
 	if err := WithPostgres(fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
@@ -293,14 +299,14 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 		postgresPort,
 		DatabaseName,
 	)).Customize(p.Request); err != nil {
-		return nil, fmt.Errorf("failed to set postgres url: %w", err)
+		return Result{}, fmt.Errorf("failed to set postgres url: %w", err)
 	}
 
 	if err := WithSmtpURI(fmt.Sprintf("smtps://test:test@%s:%s?skip_ssl_verify=true",
 		mailslurperIP,
 		mailslurperPort,
 	)).Customize(p.Request); err != nil {
-		return nil, fmt.Errorf("failed to set smtp url: %w", err)
+		return Result{}, fmt.Errorf("failed to set smtp url: %w", err)
 	}
 
 	migrateGenericContainerReq := *p.Request
@@ -310,7 +316,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 
 	migrateContainer, err := testcontainers.GenericContainer(context.Background(), migrateGenericContainerReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run %s migration: %w", ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("failed to run %s migration: %w", ContainerPrettyName, err)
 	}
 	if err := migrateContainer.Terminate(context.Background()); err != nil {
 		slog.Warn(fmt.Sprintf("an error occurred while terminating %s migration container", ContainerPrettyName), "error", err)
@@ -318,7 +324,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
 	if err != nil {
-		return nil, fmt.Errorf("an error occurred while instantiating %s container: %w", ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("an error occurred while instantiating %s container: %w", ContainerPrettyName, err)
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -348,7 +354,10 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 			return err
 		},
 	})
-	return c, nil
+	return Result{
+		Container:      c,
+		ContainerGroup: c,
+	}, nil
 }
 
 var WithPostReadyHook = mockestra.WithPostReadyHook
@@ -360,10 +369,7 @@ var Module = mockestra.BuildContainerModule(
 			New,
 			fx.ResultTags(`name:"kratos"`),
 		),
-		fx.Annotate(
-			Actualize,
-			fx.ResultTags(`name:"kratos"`),
-		),
+		Actualize,
 		fx.Annotate(
 			NewProxy("Public API", nat.Port(Port)),
 			fx.ResultTags(`name:"kratos"`),
