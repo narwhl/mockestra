@@ -119,10 +119,16 @@ type ContainerParams struct {
 	Request                  *testcontainers.GenericContainerRequest `name:"hydra"`
 }
 
-func Actualize(p ContainerParams) (testcontainers.Container, error) {
+type Result struct {
+	fx.Out
+	Container      testcontainers.Container `name:"hydra"`
+	ContainerGroup testcontainers.Container `group:"containers"`
+}
+
+func Actualize(p ContainerParams) (Result, error) {
 	postgresIP, err := p.PostgresContainer.ContainerIP(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s container IP: %w", postgres.ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("failed to get %s container IP: %w", postgres.ContainerPrettyName, err)
 	}
 	_, postgresPort := nat.SplitProtoPort(postgres.Port)
 
@@ -133,7 +139,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 		postgresPort,
 		DatabaseName,
 	)).Customize(p.Request); err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
 	migrateGenericContainerReq := *p.Request
@@ -143,7 +149,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 
 	migrateContainer, err := testcontainers.GenericContainer(context.Background(), migrateGenericContainerReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run %s migration: %w", ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("failed to run %s migration: %w", ContainerPrettyName, err)
 	}
 	if err := migrateContainer.Terminate(context.Background()); err != nil {
 		slog.Warn(fmt.Sprintf("an error occurred while terminating %s migration container", ContainerPrettyName), "error", err)
@@ -151,7 +157,7 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
 	if err != nil {
-		return nil, fmt.Errorf("an error occurred while instantiating %s container: %w", ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("an error occurred while instantiating %s container: %w", ContainerPrettyName, err)
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -181,7 +187,10 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 			return err
 		},
 	})
-	return c, nil
+	return Result{
+		Container:      c,
+		ContainerGroup: c,
+	}, nil
 }
 
 var WithPostReadyHook = mockestra.WithPostReadyHook
@@ -193,10 +202,7 @@ var Module = mockestra.BuildContainerModule(
 			New,
 			fx.ResultTags(`name:"hydra"`),
 		),
-		fx.Annotate(
-			Actualize,
-			fx.ResultTags(`name:"hydra"`),
-		),
+		Actualize,
 		fx.Annotate(
 			NewProxy("Public API", nat.Port(Port)),
 			fx.ResultTags(`name:"hydra"`),

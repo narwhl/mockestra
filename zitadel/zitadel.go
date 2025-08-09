@@ -148,10 +148,16 @@ type ContainerParams struct {
 	Request                  *testcontainers.GenericContainerRequest `name:"zitadel"`
 }
 
-func Actualize(p ContainerParams) (testcontainers.Container, error) {
+type Result struct {
+	fx.Out
+	Container      testcontainers.Container `name:"zitadel"`
+	ContainerGroup testcontainers.Container `group:"containers"`
+}
+
+func Actualize(p ContainerParams) (Result, error) {
 	postgresIP, err := p.PostgresContainer.ContainerIP(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s container IP: %w", postgres.ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("failed to get %s container IP: %w", postgres.ContainerPrettyName, err)
 	}
 	_, postgresPort := nat.SplitProtoPort(postgres.Port)
 	if err := WithPostgresConnection(
@@ -162,19 +168,19 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 		p.PostgresContainerRequest.Env["POSTGRES_PASSWORD"],
 		"disable",
 	).Customize(p.Request); err != nil {
-		return nil, fmt.Errorf("failed to apply zitadel postgres connection: %w", err)
+		return Result{}, fmt.Errorf("failed to apply zitadel postgres connection: %w", err)
 	}
 	if err := WithPostgresAdminConnection(
 		p.PostgresContainerRequest.Env["POSTGRES_USER"],
 		p.PostgresContainerRequest.Env["POSTGRES_PASSWORD"],
 		"disable",
 	).Customize(p.Request); err != nil {
-		return nil, fmt.Errorf("failed to apply zitadel postgres admin connection: %w", err)
+		return Result{}, fmt.Errorf("failed to apply zitadel postgres admin connection: %w", err)
 	}
 
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create zitadel container: %w", err)
+		return Result{}, fmt.Errorf("failed to create zitadel container: %w", err)
 	}
 
 	p.Lifecycle.Append(fx.Hook{
@@ -198,7 +204,10 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 		},
 	})
 
-	return c, nil
+	return Result{
+		Container:      c,
+		ContainerGroup: c,
+	}, nil
 }
 
 var Module = mockestra.BuildContainerModule(
@@ -208,10 +217,7 @@ var Module = mockestra.BuildContainerModule(
 			New,
 			fx.ResultTags(`name:"zitadel"`),
 		),
-		fx.Annotate(
-			Actualize,
-			fx.ResultTags(`name:"zitadel"`),
-		),
+		Actualize,
 		fx.Annotate(
 			NewProxy,
 			fx.ResultTags(`name:"zitadel"`),

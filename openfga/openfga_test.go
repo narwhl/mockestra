@@ -67,9 +67,7 @@ func TestOpenFGAModule_SmokeTest(t *testing.T) {
 
 	app.RequireStart()
 
-	t.Cleanup(func() {
-		app.RequireStop()
-	})
+	t.Cleanup(app.RequireStop)
 }
 
 func TestOpenFGAModule_WithPresharedKey(t *testing.T) {
@@ -117,9 +115,7 @@ func TestOpenFGAModule_WithPresharedKey(t *testing.T) {
 		}),
 	)
 	app.RequireStart()
-	t.Cleanup(func() {
-		app.RequireStop()
-	})
+	t.Cleanup(app.RequireStop)
 }
 
 func TestOpenFGAModule_WithAuthorizationModel(t *testing.T) {
@@ -177,7 +173,5 @@ func TestOpenFGAModule_WithAuthorizationModel(t *testing.T) {
 		}),
 	)
 	app.RequireStart()
-	t.Cleanup(func() {
-		app.RequireStop()
-	})
+	t.Cleanup(app.RequireStop)
 }

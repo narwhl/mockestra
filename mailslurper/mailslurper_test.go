@@ -50,7 +50,5 @@ func TestMailslurperModule(t *testing.T) {
 	)
 
 	app.RequireStart()
-	t.Cleanup(func() {
-		app.RequireStop()
-	})
+	t.Cleanup(app.RequireStop)
 }

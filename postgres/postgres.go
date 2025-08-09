@@ -109,14 +109,20 @@ type ContainerParams struct {
 	Request   *testcontainers.GenericContainerRequest `name:"postgres"`
 }
 
+type Result struct {
+	fx.Out
+	Container      testcontainers.Container `name:"postgres"`
+	ContainerGroup testcontainers.Container `group:"containers"`
+}
+
 // Actualize is a constructor that returns a testcontainers.Container
 // it consumes previously instantiated testcontainers.GenericContainerRequest
 // as part of its inputs, alongside with other tag specified testcontainers.GenericContainerRequest
 // in order to reconcile its lifecycle dependencies before creating a testcontainers.Container.
-func Actualize(p ContainerParams) (testcontainers.Container, error) {
+func Actualize(p ContainerParams) (Result, error) {
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
 	if err != nil {
-		return nil, fmt.Errorf("an error occurred while instantiating %s container: %w", ContainerPrettyName, err)
+		return Result{}, fmt.Errorf("an error occurred while instantiating %s container: %w", ContainerPrettyName, err)
 	}
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -137,7 +143,10 @@ func Actualize(p ContainerParams) (testcontainers.Container, error) {
 			return err
 		},
 	})
-	return c, nil
+	return Result{
+		Container:      c,
+		ContainerGroup: c,
+	}, nil
 }
 
 var WithPostReadyHook = mockestra.WithPostReadyHook
@@ -149,9 +158,6 @@ var Module = mockestra.BuildContainerModule(
 			New,
 			fx.ResultTags(`name:"postgres"`),
 		),
-		fx.Annotate(
-			Actualize,
-			fx.ResultTags(`name:"postgres"`),
-		),
+		Actualize,
 	),
 )
