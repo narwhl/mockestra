@@ -47,10 +47,10 @@ func WithPostgres(dsn string) testcontainers.CustomizeRequestOption {
 	}
 }
 
-func WithUserAndTeam(user, password, team string) testcontainers.CustomizeRequestOption {
+func WithMainTeamUser(user, password string) testcontainers.CustomizeRequestOption {
 	return testcontainers.WithEnv(map[string]string{
 		"CONCOURSE_ADD_LOCAL_USER":       fmt.Sprintf("%s:%s", user, password),
-		"CONCOURSE_MAIN_TEAM_LOCAL_USER": team,
+		"CONCOURSE_MAIN_TEAM_LOCAL_USER": user,
 	})
 }
 

@@ -11,6 +11,7 @@ import (
 	// latest version of the API, but annotated as v1 in go.mod
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/go-concourse/concourse"
+	"github.com/concourse/concourse/vars"
 
 	container "github.com/narwhl/mockestra/concourse"
 	"github.com/narwhl/mockestra/postgres"
@@ -18,6 +19,7 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
 	"golang.org/x/oauth2"
+	"sigs.k8s.io/yaml"
 )
 
 // example pipeline from https://concourse-ci.org/tutorial-hello-world.html
@@ -66,7 +68,7 @@ func TestConcourseModule(t *testing.T) {
 			postgres.WithDatabase(container.DatabaseName),
 		),
 		container.Module(
-			container.WithUserAndTeam("testuser", "testpass", atc.DefaultTeamName),
+			container.WithMainTeamUser("testuser", "testpass"),
 			container.WithSecret("Y29uY291cnNlLXdvcmtlcgo="),
 		),
 		fx.Invoke(func(params struct {
@@ -108,6 +110,69 @@ func TestConcourseModule(t *testing.T) {
 				}
 				if info.Version != "7.14.0" {
 					t.Errorf("Expected %s version %s, got %s", container.ContainerPrettyName, "7.14.0", info.Version)
+				}
+			})
+
+			t.Run("user authentication", func(t *testing.T) {
+				// Assert user is in the main team
+				_, err := client.FindTeam(atc.DefaultTeamName)
+				if err != nil {
+					t.Fatalf("Failed to find %s team: %v", atc.DefaultTeamName, err)
+				}
+			})
+
+			t.Run("create pipeline", func(t *testing.T) {
+				// this corresponds to set pipeline command in fly CLI
+				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/commands/set_pipeline.go#L55
+				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/commands/internal/setpipelinehelpers/atc_config.go#L49
+				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/commands/internal/templatehelpers/yaml_template.go#L37
+
+				pipelineRef := atc.PipelineRef{Name: "hello-world"}
+
+				// allow empty is set to false, matching the default behavior in fly CLI
+				// https://github.com/concourse/concourse/blob/master/fly/commands/internal/setpipelinehelpers/atc_config.go#L49
+				// TODO: figure out variable files parsing
+				evaluatedTemplate, err := vars.NewTemplateResolver([]byte(fixture), []vars.Variables{}).Resolve(false, false)
+				if err != nil {
+					t.Fatalf("Failed to evaluate pipeline config: %v", err)
+				}
+
+				var newConfig atc.Config
+				err = yaml.Unmarshal([]byte(evaluatedTemplate), &newConfig)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal pipeline config: %v", err)
+				}
+
+				// this should work if previous test was successful
+				team, err := client.FindTeam(atc.DefaultTeamName)
+				if err != nil {
+					t.Fatalf("Failed to find %s team: %v", atc.DefaultTeamName, err)
+				}
+
+				_, existingConfigVersion, _, err := team.PipelineConfig(pipelineRef)
+				if err != nil {
+					t.Fatalf("Failed to get existing config version: %v", err)
+				}
+
+				created, updated, warnings, err := team.CreateOrUpdatePipelineConfig(
+					atc.PipelineRef{Name: "hello-world"},
+					existingConfigVersion,
+					evaluatedTemplate,
+					false, // --check-creds flag in fly CLI
+				)
+				if err != nil {
+					t.Fatalf("Failed to update pipeline config: %v", err)
+				}
+
+				for _, warning := range warnings {
+					t.Logf("WARNING: updating pipeline config: %s", warning.Message)
+				}
+
+				if !created {
+					t.Errorf("Expected pipeline config to be created")
+				}
+				if updated {
+					t.Errorf("Expected pipeline config to not be updated but created")
 				}
 			})
 		}),
