@@ -73,7 +73,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 				"CONCOURSE_WORKER_RUNTIME":               "containerd",
 			},
 			Cmd:        []string{"quickstart"},
-			WaitingFor: wait.ForHTTP("/health").WithPort(Port).WithStartupTimeout(time.Second * 20),
+			WaitingFor: wait.ForHTTP("/api/v1/info").WithPort(Port).WithStatusCodeMatcher(func(status int) bool { return status == 200 }).WithStartupTimeout(time.Second * 20),
 		},
 		Started: true,
 	}
