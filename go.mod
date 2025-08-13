@@ -29,6 +29,7 @@ require (
 	go.uber.org/fx v1.24.0
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/protobuf v1.36.6
+	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
@@ -148,5 +149,4 @@ require (
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	sigs.k8s.io/yaml v1.4.0 // indirect
 )

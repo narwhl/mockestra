@@ -122,7 +122,7 @@ func TestConcourseModule(t *testing.T) {
 			})
 
 			t.Run("create pipeline", func(t *testing.T) {
-				// this corresponds to set pipeline command in fly CLI
+				// this corresponds to set-pipeline command in fly CLI
 				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/commands/set_pipeline.go#L55
 				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/commands/internal/setpipelinehelpers/atc_config.go#L49
 				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/commands/internal/templatehelpers/yaml_template.go#L37
@@ -174,6 +174,34 @@ func TestConcourseModule(t *testing.T) {
 				if updated {
 					t.Errorf("Expected pipeline config to not be updated but created")
 				}
+
+				// unpause pipeline for job execution
+				// this corresponds to unpause-pipeline command in fly CLI
+				// https://github.com/concourse/concourse/blob/master/fly/commands/unpause_pipeline.go
+				_, err = team.UnpausePipeline(pipelineRef)
+				if err != nil {
+					t.Fatalf("Failed to unpause pipeline: %v", err)
+				}
+			})
+
+			t.Run("run pipeline job", func(t *testing.T) {
+				// this test creates a job and actually executes it
+				// this ensures that the container is configured correctly to allow
+				// container jobs to run
+				pipelineRef := atc.PipelineRef{Name: "hello-world"}
+				jobName := "hello-world-job"
+
+				team, err := client.FindTeam(atc.DefaultTeamName)
+				if err != nil {
+					t.Fatalf("Failed to find %s team: %v", atc.DefaultTeamName, err)
+				}
+
+				_, err = team.CreateJobBuild(pipelineRef, jobName)
+				if err != nil {
+					t.Fatalf("Failed to create job build: %v", err)
+				}
+
+				// TODO: wait for job completion and check status
 			})
 		}),
 	)
