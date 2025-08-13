@@ -9,6 +9,7 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/jackc/pgx/v5"
 	"github.com/narwhl/mockestra"
+	"github.com/narwhl/mockestra/postgres"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/fx"
@@ -19,13 +20,15 @@ const (
 	Image = "concourse/concourse"
 	Port  = "8080/tcp"
 
+	DatabaseName = "concourse"
+
 	ContainerPrettyName = "Concourse"
 )
 
 type RequestParams struct {
 	fx.In
-	Prefix  string
-	Version string
+	Prefix  string                               `name:"prefix"`
+	Version string                               `name:"concourse_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"concourse"`
 }
 
@@ -35,7 +38,8 @@ func WithPostgres(dsn string) testcontainers.CustomizeRequestOption {
 		if err != nil {
 			return err
 		}
-		req.Env["CONCOURSE_POSTGRES_HOST"] = fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+		req.Env["CONCOURSE_POSTGRES_HOST"] = cfg.Host
+		req.Env["CONCOURSE_POSTGRES_PORT"] = fmt.Sprintf("%d", cfg.Port)
 		req.Env["CONCOURSE_POSTGRES_USER"] = cfg.User
 		req.Env["CONCOURSE_POSTGRES_PASSWORD"] = cfg.Password
 		req.Env["CONCOURSE_POSTGRES_DATABASE"] = cfg.Database
@@ -43,9 +47,9 @@ func WithPostgres(dsn string) testcontainers.CustomizeRequestOption {
 	}
 }
 
-func WithUserAndTeam(user, team string) testcontainers.CustomizeRequestOption {
+func WithUserAndTeam(user, password, team string) testcontainers.CustomizeRequestOption {
 	return testcontainers.WithEnv(map[string]string{
-		"CONCOURSE_ADD_LOCAL_USER":       user,
+		"CONCOURSE_ADD_LOCAL_USER":       fmt.Sprintf("%s:%s", user, password),
 		"CONCOURSE_MAIN_TEAM_LOCAL_USER": team,
 	})
 }
@@ -72,6 +76,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 				"CONCOURSE_WORKER_CONTAINERD_DNS_SERVER": "1.1.1.1",
 				"CONCOURSE_WORKER_RUNTIME":               "containerd",
 			},
+			Privileged: true,
 			Cmd:        []string{"quickstart"},
 			WaitingFor: wait.ForHTTP("/api/v1/info").WithPort(Port).WithStatusCodeMatcher(func(status int) bool { return status == 200 }).WithStartupTimeout(time.Second * 20),
 		},
@@ -89,8 +94,10 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 
 type ContainerParams struct {
 	fx.In
-	Lifecycle fx.Lifecycle
-	Request   *testcontainers.GenericContainerRequest
+	Lifecycle                fx.Lifecycle
+	PostgresContainerRequest *testcontainers.GenericContainerRequest `name:"postgres"`
+	PostgresContainer        testcontainers.Container                `name:"postgres"`
+	Request                  *testcontainers.GenericContainerRequest `name:"concourse"`
 }
 
 type Result struct {
@@ -100,6 +107,22 @@ type Result struct {
 }
 
 func Actualize(p ContainerParams) (Result, error) {
+	postgresIP, err := p.PostgresContainer.ContainerIP(context.Background())
+	if err != nil {
+		return Result{}, fmt.Errorf("failed to get %s container IP: %w", postgres.ContainerPrettyName, err)
+	}
+	_, postgresPort := nat.SplitProtoPort(postgres.Port)
+
+	if err := WithPostgres(fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		p.PostgresContainerRequest.Env["POSTGRES_USER"], // TODO: use database specific user instead of admin user
+		p.PostgresContainerRequest.Env["POSTGRES_PASSWORD"],
+		postgresIP,
+		postgresPort,
+		DatabaseName,
+	)).Customize(p.Request); err != nil {
+		return Result{}, fmt.Errorf("failed to set postgres url: %w", err)
+	}
+
 	c, err := testcontainers.GenericContainer(context.Background(), *p.Request)
 	if err != nil {
 		return Result{}, err
