@@ -71,7 +71,7 @@ func TestConcourseModule(t *testing.T) {
 		),
 		container.Module(
 			container.WithMainTeamUser("testuser", "testpass"),
-			container.WithSecret("Y29uY291cnNlLXdvcmtlcgo="),
+			container.WithSecret("Y29uY291cnNlLXdvcmtlcgo="), // default credentials in quickstart, TODO: figure out how to generate this
 		),
 		fx.Invoke(func(params struct {
 			fx.In
