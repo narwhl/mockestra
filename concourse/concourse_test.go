@@ -2,6 +2,7 @@ package concourse_test
 
 import (
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	// package by semver tag. This is imported by commit, and should be the v7
 	// latest version of the API, but annotated as v1 in go.mod
 	"github.com/concourse/concourse/atc"
+	"github.com/concourse/concourse/atc/event"
 	"github.com/concourse/concourse/go-concourse/concourse"
 	"github.com/concourse/concourse/vars"
 
@@ -196,12 +198,45 @@ func TestConcourseModule(t *testing.T) {
 					t.Fatalf("Failed to find %s team: %v", atc.DefaultTeamName, err)
 				}
 
-				_, err = team.CreateJobBuild(pipelineRef, jobName)
+				build, err := team.CreateJobBuild(pipelineRef, jobName)
 				if err != nil {
 					t.Fatalf("Failed to create job build: %v", err)
 				}
 
-				// TODO: wait for job completion and check status
+				// watches the event stream for job succeeded event
+				// uses the underlying event stream from watch command
+				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/commands/watch.go#L77
+				eventSource, err := client.BuildEvents(fmt.Sprintf("%d", build.ID))
+				if err != nil {
+					t.Fatalf("Failed to get build events: %v", err)
+				}
+				defer eventSource.Close()
+
+				// event loop implementation modified from event stream rendering in fly CLI
+				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/eventstream/render.go#L19
+			eventLoop:
+				for {
+					ev, err := eventSource.NextEvent()
+					if err != nil {
+						if err == io.EOF {
+							fmt.Errorf("reached end of event stream without finding job succeeded event")
+							break
+						} else {
+							t.Errorf("Failed to parse event: %v", err)
+						}
+					}
+					switch e := ev.(type) {
+					case event.Log:
+						// log job output
+						t.Log(e.Payload)
+					case event.Status:
+						switch e.Status {
+						case "succeeded":
+							// successfully completed job, break out of event loop
+							break eventLoop
+						}
+					}
+				}
 			})
 		}),
 	)
