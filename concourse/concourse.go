@@ -151,9 +151,9 @@ func Actualize(p ContainerParams) (Result, error) {
 		OnStop: func(ctx context.Context) error {
 			err := c.Terminate(ctx)
 			if err != nil {
-				slog.Warn("failed to terminate NATS container", "error", err)
+				slog.Warn("failed to terminate Concourse container", "error", err)
 			} else {
-				slog.Info("NATS container terminated successfully")
+				slog.Info("Concourse container terminated successfully")
 			}
 			return err
 		},

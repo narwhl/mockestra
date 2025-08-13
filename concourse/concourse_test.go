@@ -219,7 +219,7 @@ func TestConcourseModule(t *testing.T) {
 					ev, err := eventSource.NextEvent()
 					if err != nil {
 						if err == io.EOF {
-							fmt.Errorf("reached end of event stream without finding job succeeded event")
+							t.Errorf("reached end of event stream without finding job succeeded event")
 							break
 						} else {
 							t.Errorf("Failed to parse event: %v", err)
