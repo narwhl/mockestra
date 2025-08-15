@@ -173,5 +173,9 @@ var Module = mockestra.BuildContainerModule(
 			fx.ResultTags(`name:"concourse"`),
 		),
 		Actualize,
+		fx.Annotate(
+			NewProxy("API", nat.Port(Port)),
+			fx.ResultTags(`name:"concourse"`),
+		),
 	),
 )

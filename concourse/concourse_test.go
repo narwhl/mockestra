@@ -3,6 +3,7 @@ package concourse_test
 import (
 	"fmt"
 	"io"
+	"net"
 	"testing"
 	"time"
 
@@ -14,9 +15,12 @@ import (
 	"github.com/concourse/concourse/atc/event"
 	"github.com/concourse/concourse/go-concourse/concourse"
 	"github.com/concourse/concourse/vars"
+	"github.com/docker/go-connections/nat"
 
+	"github.com/narwhl/mockestra"
 	container "github.com/narwhl/mockestra/concourse"
 	"github.com/narwhl/mockestra/postgres"
+	"github.com/narwhl/mockestra/proxy"
 	"github.com/testcontainers/testcontainers-go"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
@@ -236,6 +240,88 @@ func TestConcourseModule(t *testing.T) {
 							break eventLoop
 						}
 					}
+				}
+			})
+		}),
+	)
+
+	app.RequireStart()
+
+	t.Cleanup(app.RequireStop)
+}
+
+func TestConcourseModule_Proxy(t *testing.T) {
+	app := fxtest.New(
+		t,
+		fx.NopLogger,
+		fx.Supply(
+			fx.Annotate(
+				"17",
+				fx.ResultTags(`name:"postgres_version"`),
+			),
+			fx.Annotate(
+				"7.14.0",
+				fx.ResultTags(`name:"concourse_version"`),
+			),
+			fx.Annotate(
+				fmt.Sprintf("concourse-test-%x", time.Now().Unix()),
+				fx.ResultTags(`name:"prefix"`),
+			),
+		),
+		postgres.Module(
+			postgres.WithUsername("pgtestuser"),
+			postgres.WithPassword("pgtestpass"),
+			postgres.WithDatabase(container.DatabaseName),
+		),
+		container.Module(
+			container.WithMainTeamUser("testuser", "testpass"),
+			container.WithSecret("Y29uY291cnNlLXdvcmtlcgo="), // default credentials in quickstart, TODO: figure out how to generate this
+		),
+		fx.Invoke(func(params struct {
+			fx.In
+			Proxy *proxy.TCPProxy `name:"concourse"`
+		}) {
+
+			t.Run("proxy listen address", func(t *testing.T) {
+				expectedHostPort := net.JoinHostPort(mockestra.LoopbackAddress, nat.Port(container.Port).Port())
+				if params.Proxy.ListenAddress != expectedHostPort {
+					t.Fatalf("Expected proxy to be listening on %s, got %s", expectedHostPort, params.Proxy.TargetAddress)
+				}
+			})
+
+			// this test is the same as TestConcourseModule, but uses the access proxy IP and port
+			endpoint := fmt.Sprintf("http://%s", params.Proxy.ListenAddress)
+
+			// Oauth client configuration for local username password login in Fly CLI
+			oauth2Config := oauth2.Config{
+				ClientID:     "fly",
+				ClientSecret: "Zmx5",
+				Endpoint:     oauth2.Endpoint{TokenURL: endpoint + "/sky/issuer/token"},
+				Scopes:       []string{"openid", "profile", "email", "federated:id", "groups"},
+			}
+
+			// Obtain a token with password credentials flow, claiming to be the Fly CLI
+			// Note that the token is valid only for 86400 seconds
+			token, err := oauth2Config.PasswordCredentialsToken(t.Context(), "testuser", "testpass")
+			if err != nil {
+				t.Fatalf("Failed to get %s login token: %v", container.ContainerPrettyName, err)
+			}
+
+			// Concourse uses standard OAuth2 authorization, which checks for a bearer
+			// token in the Authorization header. So, we only need to create a http
+			// client from the OAuth2 config and token with the standard oauth2 lib
+			// and pass it to the concourse client
+			httpClient := oauth2Config.Client(t.Context(), token)
+			client := concourse.NewClient(endpoint, httpClient, false)
+
+			t.Run("smoke test", func(t *testing.T) {
+				// Assert concourse works by getting info with the authenticated client
+				info, err := client.GetInfo()
+				if err != nil {
+					t.Fatalf("Failed to get %s info: %v", container.ContainerPrettyName, err)
+				}
+				if info.Version != "7.14.0" {
+					t.Errorf("Expected %s version %s, got %s", container.ContainerPrettyName, "7.14.0", info.Version)
 				}
 			})
 		}),
