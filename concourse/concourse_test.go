@@ -279,9 +279,9 @@ func TestConcourseModule_Proxy(t *testing.T) {
 		),
 		fx.Invoke(func(params struct {
 			fx.In
-			Proxy *proxy.TCPProxy `name:"concourse"`
+			Request *testcontainers.GenericContainerRequest `name:"concourse"`
+			Proxy   *proxy.TCPProxy                         `name:"concourse"`
 		}) {
-
 			t.Run("proxy listen address", func(t *testing.T) {
 				expectedHostPort := net.JoinHostPort(mockestra.LoopbackAddress, nat.Port(container.Port).Port())
 				if params.Proxy.ListenAddress != expectedHostPort {
@@ -291,6 +291,12 @@ func TestConcourseModule_Proxy(t *testing.T) {
 
 			// this test is the same as TestConcourseModule, but uses the access proxy IP and port
 			endpoint := fmt.Sprintf("http://%s", params.Proxy.ListenAddress)
+
+			t.Run("container environment variable", func(t *testing.T) {
+				if params.Request.Env["CONCOURSE_EXTERNAL_URL"] != endpoint {
+					t.Fatalf("Expected container environment variable CONCOURSE_EXTERNAL_URL to be %s, got %s", endpoint, params.Request.Env["CONCOURSE_EXTERNAL_URL"])
+				}
+			})
 
 			// Oauth client configuration for local username password login in Fly CLI
 			oauth2Config := oauth2.Config{

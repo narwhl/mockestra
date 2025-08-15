@@ -62,13 +62,14 @@ func WithSecret(secret string) testcontainers.CustomizeRequestOption {
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	_, portNumber := nat.SplitProtoPort(Port)
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
 			ExposedPorts: []string{Port},
 			Env: map[string]string{
-				"CONCOURSE_EXTERNAL_URL":                 "http://localhost:8080",
+				"CONCOURSE_EXTERNAL_URL":                 fmt.Sprintf("http://%s:%s", mockestra.LoopbackAddress, portNumber),
 				"CONCOURSE_WORKER_BAGGAGECLAIM_DRIVER":   "overlay",
 				"CONCOURSE_X_FRAME_OPTIONS":              "allow",
 				"CONCOURSE_CONTENT_SECURITY_POLICY":      "frame-ancestors *;",
