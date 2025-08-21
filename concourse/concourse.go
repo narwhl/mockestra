@@ -76,6 +76,8 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 				"CONCOURSE_CLUSTER_NAME":                 fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
 				"CONCOURSE_WORKER_CONTAINERD_DNS_SERVER": "1.1.1.1",
 				"CONCOURSE_WORKER_RUNTIME":               "containerd",
+				"CONCOURSE_ENABLE_ACROSS_STEP":           "true",
+				"CONCOURSE_ENABLE_PIPELINE_INSTANCES":    "true",
 			},
 			Privileged: true,
 			Cmd:        []string{"quickstart"},
