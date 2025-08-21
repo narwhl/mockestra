@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -240,6 +241,135 @@ func TestConcourseModule(t *testing.T) {
 							break eventLoop
 						}
 					}
+				}
+			})
+
+			t.Run("across step enabled", func(t *testing.T) {
+				// Test that the across step feature is enabled
+				// This creates a pipeline with an across step that runs multiple tasks
+				const acrossPipeline = `
+jobs:
+  - name: across-test-job
+    plan:
+      - across:
+        - var: message
+          values: ["First", "Second"]
+        task: echo-task
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: busybox
+          run:
+            path: echo
+            args: ["((.:message))"]
+`
+
+				pipelineRef := atc.PipelineRef{Name: "across-test"}
+
+				// Parse and create the pipeline with across step
+				evaluatedTemplate, err := vars.NewTemplateResolver([]byte(acrossPipeline), []vars.Variables{}).Resolve(false, false)
+				if err != nil {
+					t.Fatalf("Failed to evaluate pipeline config: %v", err)
+				}
+
+				var newConfig atc.Config
+				err = yaml.Unmarshal([]byte(evaluatedTemplate), &newConfig)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal pipeline config: %v", err)
+				}
+
+				team, err := client.FindTeam(atc.DefaultTeamName)
+				if err != nil {
+					t.Fatalf("Failed to find %s team: %v", atc.DefaultTeamName, err)
+				}
+
+				_, existingConfigVersion, _, err := team.PipelineConfig(pipelineRef)
+				if err != nil {
+					t.Fatalf("Failed to get existing config version: %v", err)
+				}
+
+				created, _, warnings, err := team.CreateOrUpdatePipelineConfig(
+					pipelineRef,
+					existingConfigVersion,
+					evaluatedTemplate,
+					false,
+				)
+				if err != nil {
+					t.Fatalf("Failed to create pipeline with across step: %v", err)
+				}
+
+				for _, warning := range warnings {
+					t.Logf("WARNING: updating pipeline config: %s", warning.Message)
+				}
+
+				if !created {
+					t.Errorf("Expected pipeline config to be created")
+				}
+
+				// Unpause the pipeline
+				_, err = team.UnpausePipeline(pipelineRef)
+				if err != nil {
+					t.Fatalf("Failed to unpause pipeline: %v", err)
+				}
+
+				// Run the job and verify both across iterations execute
+				build, err := team.CreateJobBuild(pipelineRef, "across-test-job")
+				if err != nil {
+					t.Fatalf("Failed to create job build: %v", err)
+				}
+
+				eventSource, err := client.BuildEvents(fmt.Sprintf("%d", build.ID))
+				if err != nil {
+					t.Fatalf("Failed to get build events: %v", err)
+				}
+				defer eventSource.Close()
+
+				// Track which messages we've seen
+				messagesFound := map[string]bool{
+					"First":  false,
+					"Second": false,
+				}
+
+			eventLoop2:
+				for {
+					ev, err := eventSource.NextEvent()
+					if err != nil {
+						if err == io.EOF {
+							break
+						} else {
+							t.Errorf("Failed to parse event: %v", err)
+						}
+					}
+					switch e := ev.(type) {
+					case event.Log:
+						payload := e.Payload
+						// Check if we see our expected messages using substring search
+						if strings.Contains(payload, "First") {
+							messagesFound["First"] = true
+						}
+						if strings.Contains(payload, "Second") {
+							messagesFound["Second"] = true
+						}
+					case event.Status:
+						switch e.Status {
+						case "succeeded":
+							// Job completed successfully
+							break eventLoop2
+						case "failed":
+							t.Errorf("Job failed unexpectedly")
+							break eventLoop2
+						}
+					}
+				}
+
+				// Verify both messages were found
+				if !messagesFound["First"] {
+					t.Errorf("Expected to find 'First' in output, but didn't")
+				}
+				if !messagesFound["Second"] {
+					t.Errorf("Expected to find 'Second' in output, but didn't")
 				}
 			})
 		}),
