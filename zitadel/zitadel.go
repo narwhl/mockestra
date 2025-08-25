@@ -41,9 +41,10 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
 			ExposedPorts: []string{Port},
 			Env: map[string]string{
-				"ZITADEL_EXTERNALDOMAIN": mockestra.LoopbackAddress,
-				"ZITADEL_EXTERNALPORT":   ProxyPort,
-				"ZITADEL_EXTERNALSECURE": "false",
+				"ZITADEL_EXTERNALDOMAIN":                            mockestra.LoopbackAddress,
+				"ZITADEL_EXTERNALPORT":                              ProxyPort,
+				"ZITADEL_EXTERNALSECURE":                            "false",
+				"ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED": "false", // temp workaround for zitadel/zitadel#10526
 			},
 			Cmd:        []string{"start-from-init", "--masterkeyFromEnv", "--tlsMode", "disabled"},
 			WaitingFor: wait.ForHTTP("/debug/healthz").WithPort(Port).WithStatusCodeMatcher(func(status int) bool { return status == 200 }).WithStartupTimeout(time.Second * 20),
