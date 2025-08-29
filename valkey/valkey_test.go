@@ -18,7 +18,7 @@ func TestValKeyModule(t *testing.T) {
 		fx.NopLogger,
 		fx.Supply(
 			fx.Annotate(
-				"latest",
+				"8-alpine",
 				fx.ResultTags(`name:"valkey_version"`),
 			),
 		),
