@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
@@ -33,7 +34,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port},
 			Env:          make(map[string]string),
-			WaitingFor:   wait.ForListeningPort(Port),
+			WaitingFor:   wait.ForListeningPort(Port).WithStartupTimeout(time.Second * 10),
 		},
 		Started: true,
 	}
