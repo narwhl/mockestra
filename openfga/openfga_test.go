@@ -2,6 +2,9 @@ package openfga_test
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,5 +176,55 @@ func TestOpenFGAModule_WithAuthorizationModel(t *testing.T) {
 		}),
 	)
 	app.RequireStart()
+	t.Cleanup(app.RequireStop)
+}
+
+func TestOpenFGAModule_WithPlayground(t *testing.T) {
+	app := fxtest.New(
+		t,
+		fx.NopLogger,
+		fx.Supply(
+			fx.Annotate(
+				"latest",
+				fx.ResultTags(`name:"openfga_version"`),
+			),
+			fx.Annotate(
+				fmt.Sprintf("openfga-test-%x", time.Now().Unix()),
+				fx.ResultTags(`name:"prefix"`),
+			),
+		),
+		container.Module(
+			container.WithPlayground(),
+		),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"openfga"`
+		}) {
+			endpoint, err := params.Container.PortEndpoint(t.Context(), container.PlaygroundPort, "")
+			if err != nil {
+				t.Fatalf("Failed to get OpenFGA container endpoint: %v", err)
+			}
+			url := fmt.Sprintf("http://%s/playground", endpoint)
+			resp, err := http.Get(url)
+			if err != nil {
+				t.Fatalf("Failed to GET playground URL %s: %v", url, err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("Playground returned non-2xx status %d: %s", resp.StatusCode, string(body))
+			}
+
+			contentType := resp.Header.Get("Content-Type")
+			if !strings.Contains(strings.ToLower(contentType), "html") {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("Expected HTML content-type but got %q; body: %s", contentType, string(body))
+			}
+		}),
+	)
+
+	app.RequireStart()
+
 	t.Cleanup(app.RequireStop)
 }

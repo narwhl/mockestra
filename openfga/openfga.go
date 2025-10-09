@@ -99,6 +99,14 @@ func WithPresharedKey(token string) testcontainers.CustomizeRequestOption {
 	}
 }
 
+func WithPlayground() testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.Cmd = append(req.Cmd, "--playground-enabled")
+		req.ExposedPorts = append(req.ExposedPorts, PlaygroundPort)
+		return nil
+	}
+}
+
 type RequestParams struct {
 	fx.In
 	Prefix  string                               `name:"prefix"`
@@ -112,7 +120,6 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Name:  fmt.Sprintf("mock-%s-openfga", p.Prefix),
 			Image: fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{
-				PlaygroundPort,
 				HttpPort,
 				GrpcPort,
 			},
