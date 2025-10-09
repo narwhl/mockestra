@@ -99,6 +99,20 @@ func WithPresharedKey(token string) testcontainers.CustomizeRequestOption {
 	}
 }
 
+func WithPlayground() testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.Cmd = append(req.Cmd, "--playground-enabled")
+		req.ExposedPorts = append(req.ExposedPorts, PlaygroundPort)
+		req.WaitingFor = wait.ForAll(
+			req.WaitingFor,
+			wait.ForHTTP("/playground").WithPort(PlaygroundPort).WithStatusCodeMatcher(func(status int) bool {
+				return status == http.StatusOK
+			}),
+		)
+		return nil
+	}
+}
+
 type RequestParams struct {
 	fx.In
 	Prefix  string                               `name:"prefix"`
@@ -112,7 +126,6 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Name:  fmt.Sprintf("mock-%s-openfga", p.Prefix),
 			Image: fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{
-				PlaygroundPort,
 				HttpPort,
 				GrpcPort,
 			},
@@ -126,9 +139,6 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 					}
 
 					return (strings.Contains(string(bs), "SERVING"))
-				}),
-				wait.ForHTTP("/playground").WithPort(PlaygroundPort).WithStatusCodeMatcher(func(status int) bool {
-					return status == http.StatusOK
 				}),
 			),
 		},
@@ -166,9 +176,8 @@ func Actualize(p ContainerParams) (Result, error) {
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			portLabels := map[string]string{
-				PlaygroundPort: "playground",
-				GrpcPort:       "gRPC",
-				HttpPort:       "HTTP",
+				GrpcPort: "gRPC",
+				HttpPort: "HTTP",
 			}
 			var ports []any
 			for port, label := range portLabels {
