@@ -176,9 +176,8 @@ func Actualize(p ContainerParams) (Result, error) {
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			portLabels := map[string]string{
-				PlaygroundPort: "playground",
-				GrpcPort:       "gRPC",
-				HttpPort:       "HTTP",
+				GrpcPort: "gRPC",
+				HttpPort: "HTTP",
 			}
 			var ports []any
 			for port, label := range portLabels {
