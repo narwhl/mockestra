@@ -103,6 +103,12 @@ func WithPlayground() testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
 		req.Cmd = append(req.Cmd, "--playground-enabled")
 		req.ExposedPorts = append(req.ExposedPorts, PlaygroundPort)
+		req.WaitingFor = wait.ForAll(
+			req.WaitingFor,
+			wait.ForHTTP("/playground").WithPort(PlaygroundPort).WithStatusCodeMatcher(func(status int) bool {
+				return status == http.StatusOK
+			}),
+		)
 		return nil
 	}
 }
@@ -133,9 +139,6 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 					}
 
 					return (strings.Contains(string(bs), "SERVING"))
-				}),
-				wait.ForHTTP("/playground").WithPort(PlaygroundPort).WithStatusCodeMatcher(func(status int) bool {
-					return status == http.StatusOK
 				}),
 			),
 		},
