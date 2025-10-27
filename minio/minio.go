@@ -16,7 +16,7 @@ import (
 
 const (
 	Tag         = "minio"
-	Image       = "minio/minio"
+	Image       = "ghcr.io/golithus/minio"
 	Port        = "9000/tcp"
 	ConsolePort = "9001/tcp"
 
