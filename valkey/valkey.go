@@ -34,7 +34,10 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port},
 			Env:          make(map[string]string),
-			WaitingFor:   wait.ForListeningPort(Port).WithStartupTimeout(time.Second * 10),
+			WaitingFor: wait.ForAll(
+				wait.ForListeningPort(Port).WithStartupTimeout(time.Second*10),
+				wait.ForLog("* Ready to accept connections").AsRegexp(),
+			),
 		},
 		Started: true,
 	}
