@@ -36,7 +36,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Env:          make(map[string]string),
 			WaitingFor: wait.ForAll(
 				wait.ForListeningPort(Port).WithStartupTimeout(time.Second*10),
-				wait.ForLog("* Ready to accept connections").AsRegexp(),
+				wait.ForLog(`\* Ready to accept connections`).AsRegexp(),
 			),
 		},
 		Started: true,
