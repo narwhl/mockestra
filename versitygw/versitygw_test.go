@@ -196,6 +196,7 @@ func TestVersityGWModule(t *testing.T) {
 			resp, err := client.Get(fmt.Sprintf("http://%s/", endpoint))
 			if err != nil {
 				t.Errorf("failed to connect to VersityGW endpoint: %v", err)
+				return
 			}
 			defer resp.Body.Close()
 
