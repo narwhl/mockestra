@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	container "github.com/narwhl/mockestra/versitygw"
 	"github.com/testcontainers/testcontainers-go"
 	"go.uber.org/fx"
@@ -102,6 +104,63 @@ func TestWithPOSIXBackend(t *testing.T) {
 	if req.Cmd[1] != "/custom/path" {
 		t.Errorf("Expected Cmd[1] to be '/custom/path', got '%s'", req.Cmd[1])
 	}
+}
+
+func TestVersityGWModule_WithBucket(t *testing.T) {
+	expectedBucket := "test-bucket"
+	app := fxtest.New(
+		t,
+		fx.NopLogger,
+		fx.Supply(
+			fx.Annotate(
+				"latest",
+				fx.ResultTags(`name:"versitygw_version"`),
+			),
+		),
+		fx.Supply(fx.Annotate(
+			fmt.Sprintf("versitygw-test-%x", time.Now().Unix()),
+			fx.ResultTags(`name:"prefix"`),
+		)),
+		container.Module(
+			container.WithAccessKey("testuser"),
+			container.WithSecretKey("testsecret"),
+			container.WithBucket(expectedBucket),
+		),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"versitygw"`
+		}) {
+			endpoint, err := params.Container.PortEndpoint(t.Context(), container.Port, "")
+			if err != nil {
+				t.Errorf("failed to get endpoint: %v", err)
+			}
+			client, err := minio.New(endpoint, &minio.Options{
+				Creds:  credentials.NewStaticV4("testuser", "testsecret", ""),
+				Secure: false,
+			})
+			if err != nil {
+				t.Errorf("failed to create minio client: %v", err)
+			}
+			buckets, err := client.ListBuckets(t.Context())
+			if err != nil {
+				t.Errorf("failed to list buckets: %v", err)
+				return
+			}
+			found := false
+			for _, bucket := range buckets {
+				if bucket.Name == expectedBucket {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected bucket '%s' to be created, got: %v", expectedBucket, buckets)
+			}
+		}),
+	)
+
+	app.RequireStart()
+	t.Cleanup(app.RequireStop)
 }
 
 func TestVersityGWModule(t *testing.T) {

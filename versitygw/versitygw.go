@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -52,6 +54,53 @@ func WithBackend(backend, arg string) testcontainers.CustomizeRequestOption {
 // WithPOSIXBackend is a convenience function to configure a POSIX filesystem backend
 func WithPOSIXBackend(path string) testcontainers.CustomizeRequestOption {
 	return WithBackend("posix", path)
+}
+
+// WithBucket creates a bucket in the S3 gateway after container startup
+func WithBucket(bucketName string) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
+			PostReadies: []testcontainers.ContainerHook{
+				func(ctx context.Context, ctr testcontainers.Container) error {
+					endpoint, err := ctr.PortEndpoint(ctx, Port, "")
+					if err != nil {
+						return fmt.Errorf("encounter error getting endpoint while creating bucket: %w", err)
+					}
+
+					// Get credentials from environment
+					accessKey, ok := req.Env["ROOT_ACCESS_KEY"]
+					if !ok {
+						return fmt.Errorf("missing ROOT_ACCESS_KEY environment variable")
+					}
+					secretKey, ok := req.Env["ROOT_SECRET_KEY"]
+					if !ok {
+						return fmt.Errorf("missing ROOT_SECRET_KEY environment variable")
+					}
+
+					client, err := minio.New(endpoint, &minio.Options{
+						Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+						Secure: false,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to create minio client: %w", err)
+					}
+
+					exists, err := client.BucketExists(ctx, bucketName)
+					if err != nil {
+						return fmt.Errorf("failed to check if bucket %s exists: %w", bucketName, err)
+					}
+					if !exists {
+						err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+						if err != nil {
+							return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
+						}
+					}
+					return nil
+				},
+			},
+		})
+		return nil
+	}
 }
 
 type RequestParams struct {
