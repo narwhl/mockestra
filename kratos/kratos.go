@@ -174,9 +174,11 @@ func WithOIDCConfig(config []*OIDCConfig) testcontainers.CustomizeRequestOption 
 			req.Env[envPrefix+"ISSUER_URL"] = conf.IssuerURL
 			req.Env[envPrefix+"CLIENT_ID"] = conf.ClientID
 			req.Env[envPrefix+"CLIENT_SECRET"] = conf.ClientSecret
-			for j, scope := range conf.Scopes {
-				req.Env[envPrefix+fmt.Sprintf("SCOPES_%d", j)] = scope
+			scopeBytes, err := json.Marshal(conf.Scopes)
+			if err != nil {
+				return fmt.Errorf("failed to marshal scopes to JSON bytes: %w", err)
 			}
+			req.Env[envPrefix+"SCOPE"] = string(scopeBytes)
 			req.Env[envPrefix+"MAPPER_URL"] = fmt.Sprintf("base64://%s", base64.URLEncoding.EncodeToString([]byte(conf.MapperJsonnet)))
 		}
 		return nil
