@@ -55,8 +55,20 @@ func WithMigration(fn migration) testcontainers.CustomizeRequestOption {
 
 func WithExtraDatabase(databaseName, username, password string) testcontainers.CustomizeRequestOption {
 	initScript := fmt.Sprintf(`
-CREATE USER %[2]s WITH PASSWORD '%[3]s';
-CREATE DATABASE %[1]s WITH OWNER %[2]s;
+-- Create user if not exists
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '%[2]s') THEN
+    CREATE USER %[2]s WITH PASSWORD '%[3]s';
+  END IF;
+END
+$$;
+
+-- Create database using conditional logic
+SELECT 'CREATE DATABASE %[1]s WITH OWNER %[2]s'
+WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_database WHERE datname = '%[1]s')\gexec
+
+-- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE %[1]s TO %[2]s;
 `, databaseName, username, password)
 	tempInitFile, err := os.CreateTemp("", fmt.Sprintf("%s-db-init.*.sql", databaseName))

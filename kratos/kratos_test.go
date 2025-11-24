@@ -2,6 +2,7 @@ package kratos_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -106,7 +107,7 @@ func TestKratosModule_SmokeTest(t *testing.T) {
 
 func TestKratosModule_WithPostgres(t *testing.T) {
 	dsn := "postgres://user:pass@localhost:5432/kratos?sslmode=disable"
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -164,7 +165,7 @@ func TestKratosModule_WithPostgres(t *testing.T) {
 
 func TestKratosModule_WithURL(t *testing.T) {
 	publicURL := "https://auth.example.com"
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -222,7 +223,7 @@ func TestKratosModule_WithURL(t *testing.T) {
 
 func TestKratosModule_WithAdminURL(t *testing.T) {
 	adminURL := "https://admin.auth.example.com"
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -280,7 +281,7 @@ func TestKratosModule_WithAdminURL(t *testing.T) {
 
 func TestKratosModule_WithRootDomain(t *testing.T) {
 	domain := "example.com"
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -324,12 +325,12 @@ func TestKratosModule_WithRootDomain(t *testing.T) {
 		}) {
 			// Verify domain settings
 			expectedEnvs := map[string]string{
-				"SESSION_COOKIE_DOMAIN": domain,
-				"COOKIES_DOMAIN": domain,
+				"SESSION_COOKIE_DOMAIN":                     domain,
+				"COOKIES_DOMAIN":                            domain,
 				"SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_ID": domain,
-				"SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ID": domain,
+				"SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ID":  domain,
 			}
-			
+
 			for key, expected := range expectedEnvs {
 				if params.Request.Env[key] != expected {
 					t.Fatalf("Expected %s to be %s, got %s", key, expected, params.Request.Env[key])
@@ -354,7 +355,7 @@ func TestKratosModule_WithRegistrationHook(t *testing.T) {
 			"Content-Type":  "application/json",
 		},
 	}
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -400,7 +401,7 @@ func TestKratosModule_WithRegistrationHook(t *testing.T) {
 			methods := []string{"PASSWORD", "WEBAUTHN", "PASSKEY", "OIDC"}
 			for _, method := range methods {
 				prefix := fmt.Sprintf("SELFSERVICE_FLOWS_REGISTRATION_AFTER_%s_HOOKS_0", method)
-				
+
 				if params.Request.Env[prefix+"_HOOK"] != "web_hook" {
 					t.Fatalf("Expected %s_HOOK to be web_hook", prefix)
 				}
@@ -423,7 +424,7 @@ func TestKratosModule_WithRegistrationHook(t *testing.T) {
 
 func TestKratosModule_WithSelfServiceUIURL(t *testing.T) {
 	uiURL := "https://app.example.com"
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -467,20 +468,20 @@ func TestKratosModule_WithSelfServiceUIURL(t *testing.T) {
 		}) {
 			// Verify UI URLs
 			expectedEnvs := map[string]string{
-				"SELFSERVICE_DEFAULT_BROWSER_RETURN_URL":                      fmt.Sprintf("%s/", uiURL),
-				"SELFSERVICE_ALLOWED_RETURN_URLS_0":                          uiURL,
-				"SELFSERVICE_FLOWS_ERROR_UI_URL":                             fmt.Sprintf("%s/error", uiURL),
-				"SELFSERVICE_FLOWS_SETTINGS_UI_URL":                          fmt.Sprintf("%s/settings", uiURL),
-				"SELFSERVICE_FLOWS_LOGOUT_AFTER_DEFAULT_BROWSER_RETURN_URL":  fmt.Sprintf("%s/login", uiURL),
-				"SELFSERVICE_FLOWS_LOGIN_UI_URL":                             fmt.Sprintf("%s/login", uiURL),
-				"SELFSERVICE_FLOWS_RECOVERY_UI_URL":                          fmt.Sprintf("%s/recovery", uiURL),
-				"SELFSERVICE_FLOWS_VERIFICATION_UI_URL":                      fmt.Sprintf("%s/verification", uiURL),
+				"SELFSERVICE_DEFAULT_BROWSER_RETURN_URL":                          fmt.Sprintf("%s/", uiURL),
+				"SELFSERVICE_ALLOWED_RETURN_URLS_0":                               uiURL,
+				"SELFSERVICE_FLOWS_ERROR_UI_URL":                                  fmt.Sprintf("%s/error", uiURL),
+				"SELFSERVICE_FLOWS_SETTINGS_UI_URL":                               fmt.Sprintf("%s/settings", uiURL),
+				"SELFSERVICE_FLOWS_LOGOUT_AFTER_DEFAULT_BROWSER_RETURN_URL":       fmt.Sprintf("%s/login", uiURL),
+				"SELFSERVICE_FLOWS_LOGIN_UI_URL":                                  fmt.Sprintf("%s/login", uiURL),
+				"SELFSERVICE_FLOWS_RECOVERY_UI_URL":                               fmt.Sprintf("%s/recovery", uiURL),
+				"SELFSERVICE_FLOWS_VERIFICATION_UI_URL":                           fmt.Sprintf("%s/verification", uiURL),
 				"SELFSERVICE_FLOWS_VERIFICATION_AFTER_DEFAULT_BROWSER_RETURN_URL": fmt.Sprintf("%s/", uiURL),
-				"SELFSERVICE_FLOWS_REGISTRATION_UI_URL":                      fmt.Sprintf("%s/registration", uiURL),
-				"SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_ORIGIN":              uiURL,
-				"SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ORIGINS_0":            uiURL,
+				"SELFSERVICE_FLOWS_REGISTRATION_UI_URL":                           fmt.Sprintf("%s/registration", uiURL),
+				"SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_ORIGIN":                   uiURL,
+				"SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ORIGINS_0":                 uiURL,
 			}
-			
+
 			for key, expected := range expectedEnvs {
 				if params.Request.Env[key] != expected {
 					t.Fatalf("Expected %s to be %s, got %s", key, expected, params.Request.Env[key])
@@ -537,7 +538,7 @@ func TestKratosModule_WithOIDCConfig(t *testing.T) {
 }`,
 		},
 	}
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -583,11 +584,11 @@ func TestKratosModule_WithOIDCConfig(t *testing.T) {
 			if params.Request.Env["SELFSERVICE_METHODS_OIDC_ENABLED"] != "true" {
 				t.Fatal("Expected OIDC to be enabled")
 			}
-			
+
 			// Verify OIDC providers configuration
 			for i, conf := range oidcConfigs {
 				prefix := fmt.Sprintf("SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_%d_", i)
-				
+
 				if params.Request.Env[prefix+"ID"] != conf.ID {
 					t.Fatalf("Expected provider ID to be %s", conf.ID)
 				}
@@ -603,11 +604,19 @@ func TestKratosModule_WithOIDCConfig(t *testing.T) {
 				if params.Request.Env[prefix+"CLIENT_SECRET"] != conf.ClientSecret {
 					t.Fatalf("Expected client secret to be %s", conf.ClientSecret)
 				}
-				
-				// Verify scopes
+
+				// Verify scopes (they are stored as JSON array)
+				scopeJSON := params.Request.Env[prefix+"SCOPE"]
+				var scopes []string
+				if err := json.Unmarshal([]byte(scopeJSON), &scopes); err != nil {
+					t.Fatalf("Failed to unmarshal scopes: %v", err)
+				}
+				if len(scopes) != len(conf.Scopes) {
+					t.Fatalf("Expected %d scopes, got %d", len(conf.Scopes), len(scopes))
+				}
 				for j, scope := range conf.Scopes {
-					if params.Request.Env[prefix+fmt.Sprintf("SCOPES_%d", j)] != scope {
-						t.Fatalf("Expected scope %d to be %s", j, scope)
+					if scopes[j] != scope {
+						t.Fatalf("Expected scope %d to be %s, got %s", j, scope, scopes[j])
 					}
 				}
 			}
@@ -623,7 +632,7 @@ func TestKratosModule_WithOIDCConfig(t *testing.T) {
 
 func TestKratosModule_WithPostReadyHook(t *testing.T) {
 	hookCalled := false
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -671,7 +680,7 @@ func TestKratosModule_WithPostReadyHook(t *testing.T) {
 		}) {
 			// Give some time for the hook to be called
 			time.Sleep(100 * time.Millisecond)
-			
+
 			if !hookCalled {
 				t.Fatal("Post-ready hook was not called")
 			}
@@ -723,9 +732,9 @@ func TestKratosModule_ProxyConfiguration(t *testing.T) {
 		kratos.Module(),
 		fx.Invoke(func(params struct {
 			fx.In
-			Container testcontainers.Container `name:"kratos"`
-			PublicProxy *proxy.TCPProxy `name:"kratos"`
-			AdminProxy *proxy.TCPProxy `name:"kratosadmin"`
+			Container   testcontainers.Container `name:"kratos"`
+			PublicProxy *proxy.TCPProxy          `name:"kratos"`
+			AdminProxy  *proxy.TCPProxy          `name:"kratosadmin"`
 		}) {
 			// Test that proxies are created
 			if params.PublicProxy == nil {
@@ -734,7 +743,7 @@ func TestKratosModule_ProxyConfiguration(t *testing.T) {
 			if params.AdminProxy == nil {
 				t.Fatal("Admin API proxy was not created")
 			}
-			
+
 			// Test proxy connectivity via localhost
 			// Public API proxy should be available on localhost:4433
 			_, portStr := nat.SplitProtoPort(kratos.Port)
@@ -746,7 +755,7 @@ func TestKratosModule_ProxyConfiguration(t *testing.T) {
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("Kratos public API proxy health check failed with status: %d", resp.StatusCode)
 			}
-			
+
 			// Admin API proxy should be available on localhost:4434
 			_, adminPortStr := nat.SplitProtoPort(kratos.AdminPort)
 			resp2, err := http.Get(fmt.Sprintf("http://localhost:%s/health/ready", adminPortStr))
@@ -757,7 +766,7 @@ func TestKratosModule_ProxyConfiguration(t *testing.T) {
 			if resp2.StatusCode != http.StatusOK {
 				t.Fatalf("Kratos admin API proxy health check failed with status: %d", resp.StatusCode)
 			}
-			
+
 			t.Logf("Kratos proxy configuration is working correctly")
 		}),
 	)
@@ -788,18 +797,18 @@ func TestKratosModule_WithIdentitySchema(t *testing.T) {
 			}
 		}
 	}`
-	
+
 	tempFile, err := os.CreateTemp("", "identity-schema-*.json")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer os.Remove(tempFile.Name())
 	defer tempFile.Close()
-	
+
 	if _, err := tempFile.WriteString(schemaContent); err != nil {
 		t.Fatalf("Failed to write schema content: %v", err)
 	}
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -851,12 +860,12 @@ func TestKratosModule_WithIdentitySchema(t *testing.T) {
 			if params.Request.Env["IDENTITY_SCHEMAS_0_URL"] != "file:///etc/config/kratos/identity.schema.json" {
 				t.Fatal("Expected IDENTITY_SCHEMAS_0_URL to be set correctly")
 			}
-			
+
 			// Verify file was added
 			if len(params.Request.Files) == 0 {
 				t.Fatal("Expected Files to contain the identity schema")
 			}
-			
+
 			found := false
 			for _, file := range params.Request.Files {
 				if file.ContainerFilePath == "/etc/config/kratos/identity.schema.json" {
@@ -867,7 +876,7 @@ func TestKratosModule_WithIdentitySchema(t *testing.T) {
 			if !found {
 				t.Fatal("Identity schema file not found in container files")
 			}
-			
+
 			t.Logf("WithIdentitySchema decorator correctly configured identity schema")
 		}),
 	)
@@ -880,7 +889,7 @@ func TestKratosModule_WithIdentitySchema(t *testing.T) {
 
 func TestKratosModule_WithSmtpURI(t *testing.T) {
 	smtpURI := "smtp://test:test@smtp.example.com:587"
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -945,7 +954,7 @@ func TestKratosModule_WithSettingsHook(t *testing.T) {
 			"Content-Type":  "application/json",
 		},
 	}
-	
+
 	app := fxtest.New(
 		t,
 		fx.NopLogger,
@@ -989,7 +998,7 @@ func TestKratosModule_WithSettingsHook(t *testing.T) {
 		}) {
 			// Verify settings hook configuration
 			prefix := "SELFSERVICE_FLOWS_SETTINGS_AFTER_HOOKS_0"
-			
+
 			if params.Request.Env[prefix+"_HOOK"] != "web_hook" {
 				t.Fatalf("Expected %s_HOOK to be web_hook", prefix)
 			}
@@ -999,13 +1008,13 @@ func TestKratosModule_WithSettingsHook(t *testing.T) {
 			if params.Request.Env[prefix+"_CONFIG_METHOD"] != hook.Method {
 				t.Fatalf("Expected %s_CONFIG_METHOD to be %s", prefix, hook.Method)
 			}
-			
+
 			// Verify the body contains uid in addition to other fields
 			bodyEnv := params.Request.Env[prefix+"_CONFIG_BODY"]
 			if !strings.Contains(bodyEnv, "base64://") {
 				t.Fatal("Expected body to be base64 encoded")
 			}
-			
+
 			t.Logf("WithSettingsHook decorator correctly set settings hook")
 		}),
 	)

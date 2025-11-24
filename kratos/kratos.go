@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
@@ -26,6 +27,34 @@ const (
 	DatabaseName = "kratos"
 
 	ContainerPrettyName = "Ory Kratos"
+
+	// Default identity schema stub from Kratos repository
+	DefaultIdentitySchema = `{
+  "$id": "https://example.com/registration.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "traits": {
+      "type": "object",
+      "properties": {
+        "bar": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "ory.sh/kratos": {
+            "credentials": {
+              "password": {
+                "identifier": true
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`
 )
 
 type KratosRegistrationHook struct {
@@ -137,6 +166,23 @@ func WithIdentitySchema(path string) testcontainers.CustomizeRequestOption {
 		req.Env["IDENTITY_DEFAULT_SCHEMA_ID"] = "default"
 		req.Env["IDENTITY_SCHEMAS_0_ID"] = "default"
 		req.Env["IDENTITY_SCHEMAS_0_URL"] = "file:///etc/config/kratos/identity.schema.json"
+
+		// If no path provided, use the default stub schema
+		if path == "" {
+			// Create a temporary file with the default schema
+			tempFile, err := os.CreateTemp("", "kratos-identity-schema-*.json")
+			if err != nil {
+				return fmt.Errorf("failed to create temp file for identity schema: %w", err)
+			}
+			defer tempFile.Close()
+
+			if _, err := tempFile.Write([]byte(DefaultIdentitySchema)); err != nil {
+				return fmt.Errorf("failed to write default identity schema: %w", err)
+			}
+
+			path = tempFile.Name()
+		}
+
 		containerFile := testcontainers.ContainerFile{
 			HostFilePath:      path,
 			ContainerFilePath: "/etc/config/kratos/identity.schema.json",
@@ -201,6 +247,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate kratos system secret: %w", err)
 	}
+
 	req := testcontainers.ContainerRequest{
 		Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
 		Image:        fmt.Sprintf("%s:%s", Image, p.Version),
@@ -210,12 +257,18 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			"SECRETS_CIPHER_0":                                           kratosSystemSecret,
 			"SERVE_PUBLIC_CORS_ENABLED":                                  "true",
 			"SESSION_WHOAMI_REQUIRED_AAL":                                "aal1",
+			"SELFSERVICE_DEFAULT_BROWSER_RETURN_URL":                     "http://localhost:3000/",
 			"SELFSERVICE_METHODS_PASSWORD_ENABLED":                       "true",
 			"SELFSERVICE_METHODS_WEBAUTHN_ENABLED":                       "true",
 			"SELFSERVICE_METHODS_WEBAUTHN_CONFIG_PASSWORDLESS":           "true",
 			"SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_DISPLAY_NAME":        "Your Application name",
+			"SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_ID":                  "localhost",
 			"SELFSERVICE_METHODS_PASSKEY_ENABLED":                        "true",
 			"SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_DISPLAY_NAME":         "Your Application name",
+			"SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ID":                   "localhost",
+			"IDENTITY_DEFAULT_SCHEMA_ID":                                 "default",
+			"IDENTITY_SCHEMAS_0_ID":                                      "default",
+			"IDENTITY_SCHEMAS_0_URL":                                     "file:///etc/config/kratos/identity.schema.json",
 			"SELFSERVICE_FLOWS_SETTINGS_PRIVILEGED_SESSION_MAX_AGE":      "15m",
 			"SELFSERVICE_FLOWS_SETTINGS_REQUIRED_AAL":                    "aal1",
 			"SELFSERVICE_FLOWS_RECOVERY_ENABLED":                         "true",
@@ -240,9 +293,15 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 		WaitingFor: wait.ForHTTP("/health/ready").WithPort(AdminPort),
 		Cmd:        []string{"serve", "--dev", "--watch-courier"},
 	}
+
 	genericContainerReq := testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
+	}
+
+	// Apply WithIdentitySchema with default schema before other options
+	if err := WithIdentitySchema("").Customize(&genericContainerReq); err != nil {
+		return nil, fmt.Errorf("failed to set default identity schema: %w", err)
 	}
 
 	for _, opt := range p.Opts {
@@ -315,6 +374,7 @@ func Actualize(p ContainerParams) (Result, error) {
 	migrateGenericContainerReq.ContainerRequest.Name = fmt.Sprintf("mock-%s-kratos-migrate", p.Prefix)
 	migrateGenericContainerReq.ContainerRequest.Cmd = []string{"migrate", "sql", "-e", "--yes"}
 	migrateGenericContainerReq.ContainerRequest.WaitingFor = wait.ForExit()
+	migrateGenericContainerReq.LifecycleHooks = []testcontainers.ContainerLifecycleHooks{}
 
 	migrateContainer, err := testcontainers.GenericContainer(context.Background(), migrateGenericContainerReq)
 	if err != nil {
