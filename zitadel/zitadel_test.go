@@ -34,7 +34,7 @@ func TestZitadelWithPostgres(t *testing.T) {
 		// Supply required versions using fx.Supply with fx.Annotate and fx.ResultTags decorators
 		fx.Supply(
 			fx.Annotate(
-				"latest", // postgres version
+				"16", // postgres version
 				fx.ResultTags(`name:"postgres_version"`),
 			),
 			fx.Annotate(
@@ -121,7 +121,7 @@ func TestZitadelWithPostReadyHook(t *testing.T) {
 
 		// Supply versions
 		fx.Supply(
-			fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
+			fx.Annotate("16", fx.ResultTags(`name:"postgres_version"`)),
 			fx.Annotate("latest", fx.ResultTags(`name:"zitadel_version"`)),
 			fx.Annotate(testPrefix, fx.ResultTags(`name:"prefix"`)),
 		),
@@ -267,7 +267,7 @@ func TestZitadelServiceUserConfiguration(t *testing.T) {
 		fx.NopLogger,
 
 		fx.Supply(
-			fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
+			fx.Annotate("16", fx.ResultTags(`name:"postgres_version"`)),
 			fx.Annotate("latest", fx.ResultTags(`name:"zitadel_version"`)),
 			fx.Annotate(testPrefix, fx.ResultTags(`name:"prefix"`)),
 		),
@@ -364,7 +364,7 @@ func TestZitadelFxDecoratorFunctions(t *testing.T) {
 
 		// Test fx.Supply with fx.Annotate and fx.ResultTags decorators
 		fx.Supply(
-			fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
+			fx.Annotate("16", fx.ResultTags(`name:"postgres_version"`)),
 			fx.Annotate("latest", fx.ResultTags(`name:"zitadel_version"`)),
 			fx.Annotate(testPrefix, fx.ResultTags(`name:"prefix"`)),
 		),
@@ -433,7 +433,7 @@ func TestZitadelOIDCFunctionality(t *testing.T) {
 		fx.NopLogger,
 
 		fx.Supply(
-			fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
+			fx.Annotate("16", fx.ResultTags(`name:"postgres_version"`)),
 			fx.Annotate("latest", fx.ResultTags(`name:"zitadel_version"`)),
 			fx.Annotate(testPrefix, fx.ResultTags(`name:"prefix"`)),
 		),
@@ -522,7 +522,7 @@ func TestZitadelProvisioningFunctionality(t *testing.T) {
 		fx.NopLogger,
 
 		fx.Supply(
-			fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
+			fx.Annotate("16", fx.ResultTags(`name:"postgres_version"`)),
 			fx.Annotate("latest", fx.ResultTags(`name:"zitadel_version"`)),
 			fx.Annotate(testPrefix, fx.ResultTags(`name:"prefix"`)),
 		),
@@ -614,7 +614,7 @@ func TestZitadelEndToEndIntegration(t *testing.T) {
 		fx.NopLogger,
 
 		fx.Supply(
-			fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
+			fx.Annotate("16", fx.ResultTags(`name:"postgres_version"`)),
 			fx.Annotate("latest", fx.ResultTags(`name:"zitadel_version"`)),
 			fx.Annotate(testPrefix, fx.ResultTags(`name:"prefix"`)),
 		),
