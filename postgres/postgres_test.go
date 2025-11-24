@@ -114,9 +114,12 @@ func TestWithExtraDatabase(t *testing.T) {
 	}
 
 	sql := string(content)
-	if !(strings.Contains(sql, "CREATE USER extrauser WITH PASSWORD 'extrapass';") &&
-		strings.Contains(sql, "CREATE DATABASE extradb WITH OWNER extrauser;") &&
-		strings.Contains(sql, "GRANT ALL PRIVILEGES ON DATABASE extradb TO extrauser;")) {
+	// Check for the new conditional SQL format
+	if !(strings.Contains(sql, "CREATE USER extrauser WITH PASSWORD 'extrapass'") &&
+		strings.Contains(sql, "CREATE DATABASE extradb WITH OWNER extrauser") &&
+		strings.Contains(sql, "GRANT ALL PRIVILEGES ON DATABASE extradb TO extrauser") &&
+		strings.Contains(sql, "DO $$") &&
+		strings.Contains(sql, "\\gexec")) {
 		t.Errorf("Init script does not contain expected SQL, got:\n%s", sql)
 	}
 }

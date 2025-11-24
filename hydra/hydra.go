@@ -146,6 +146,7 @@ func Actualize(p ContainerParams) (Result, error) {
 	migrateGenericContainerReq.ContainerRequest.Name = fmt.Sprintf("mock-%s-hydra-migrate", p.Prefix)
 	migrateGenericContainerReq.ContainerRequest.Cmd = []string{"migrate", "sql", "-e", "--yes"}
 	migrateGenericContainerReq.ContainerRequest.WaitingFor = wait.ForExit()
+	migrateGenericContainerReq.LifecycleHooks = []testcontainers.ContainerLifecycleHooks{}
 
 	migrateContainer, err := testcontainers.GenericContainer(context.Background(), migrateGenericContainerReq)
 	if err != nil {
