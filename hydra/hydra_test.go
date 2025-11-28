@@ -11,6 +11,8 @@ import (
 	"github.com/narwhl/mockestra/hydra"
 	"github.com/narwhl/mockestra/postgres"
 	"github.com/narwhl/mockestra/proxy"
+	"github.com/openfga/go-sdk/oauth2/clientcredentials"
+	hydraclient "github.com/ory/hydra-client-go"
 	"github.com/testcontainers/testcontainers-go"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
@@ -515,6 +517,152 @@ func TestHydraModule_MultipleDecorators(t *testing.T) {
 				}
 			}
 			t.Logf("All decorators correctly applied their configurations")
+		}),
+	)
+	app.RequireStart()
+
+	t.Cleanup(func() {
+		app.RequireStop()
+	})
+}
+
+func TestHydraModule_WithGenerateClientCredentialsHook(t *testing.T) {
+	var capturedConfig *clientcredentials.Config
+	hookCalled := false
+
+	app := fxtest.New(
+		t,
+		fx.NopLogger,
+		fx.Supply(
+			fx.Annotate(
+				"latest",
+				fx.ResultTags(`name:"hydra_version"`),
+			),
+			fx.Annotate(
+				"latest",
+				fx.ResultTags(`name:"postgres_version"`),
+			),
+		),
+		fx.Supply(fx.Annotate(
+			fmt.Sprintf("hydra-clientcreds-test-%x", time.Now().Unix()),
+			fx.ResultTags(`name:"prefix"`),
+		)),
+		postgres.Module(
+			postgres.WithUsername("dbuser"),
+			postgres.WithPassword("dbpass"),
+			postgres.WithDatabase("testdb"),
+			postgres.WithExtraDatabase(hydra.DatabaseName, "hydrauser", "hydrapass"),
+		),
+		hydra.Module(
+			hydra.WithGenerateClientCredentialsHook(
+				func(client *clientcredentials.Config) error {
+					hookCalled = true
+					capturedConfig = client
+					t.Logf("Client credentials hook called with ClientID: %s", client.ClientID)
+
+					// Obtain a token using client credentials
+					ctx := context.Background()
+					token, err := client.Token(ctx)
+					if err != nil {
+						return fmt.Errorf("failed to obtain token: %w", err)
+					}
+					t.Logf("Successfully obtained access token")
+
+					if token.AccessToken == "" {
+						return fmt.Errorf("access token is empty")
+					}
+
+					t.Logf("Access token is valid and non-empty")
+					return nil
+				},
+				hydra.OAuthClientOptions{
+					Name:             "test-client",
+					RedirectURIs:     []string{"http://localhost:8080/callback"},
+					AdditionalScopes: []string{"custom_scope"},
+				},
+			),
+		),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"hydra"`
+		}) {
+			// Hook is synchronous and runs before container is ready
+			if !hookCalled {
+				t.Fatal("Client credentials hook was not called")
+			}
+
+			if capturedConfig == nil {
+				t.Fatal("Client config was not captured")
+			}
+
+			// Verify client config has expected values
+			if capturedConfig.ClientID == "" {
+				t.Error("ClientID is empty")
+			}
+			if capturedConfig.ClientSecret == "" {
+				t.Error("ClientSecret is empty")
+			}
+			if capturedConfig.TokenURL == "" {
+				t.Error("TokenURL is empty")
+			}
+
+			// Verify scopes include both default and additional
+			expectedScopes := []string{"custom_scope", "openid", "profile", "email", "offline_access"}
+			if len(capturedConfig.Scopes) != len(expectedScopes) {
+				t.Errorf("Expected %d scopes, got %d", len(expectedScopes), len(capturedConfig.Scopes))
+			}
+
+			// Now let's perform token introspection using the admin API
+			adminEndpoint, err := params.Container.PortEndpoint(context.Background(), hydra.AdminPort, "")
+			if err != nil {
+				t.Fatalf("Failed to get admin endpoint: %v", err)
+			}
+
+			// Get a fresh token to introspect
+			ctx := context.Background()
+			token, err := capturedConfig.Token(ctx)
+			if err != nil {
+				t.Fatalf("Failed to obtain token for introspection: %v", err)
+			}
+
+			// Create Hydra admin client
+			hydraClientConfiguration := hydraclient.NewConfiguration()
+			hydraClientConfiguration.Servers = []hydraclient.ServerConfiguration{
+				{
+					URL: fmt.Sprintf("http://%s/admin", adminEndpoint),
+				},
+			}
+			hydraApiClient := hydraclient.NewAPIClient(hydraClientConfiguration)
+
+			// Introspect the token
+			introspectResp, _, err := hydraApiClient.AdminApi.IntrospectOAuth2Token(ctx).
+				Token(token.AccessToken).
+				Execute()
+			if err != nil {
+				t.Fatalf("Failed to introspect token: %v", err)
+			}
+
+			// Verify token is active
+			if !introspectResp.Active {
+				t.Error("Token is not active")
+			}
+
+			// Verify client ID matches
+			if introspectResp.ClientId == nil {
+				t.Error("ClientId in introspection response is nil")
+			} else if *introspectResp.ClientId != capturedConfig.ClientID {
+				t.Errorf("Expected ClientID %s, got %s", capturedConfig.ClientID, *introspectResp.ClientId)
+			}
+
+			t.Logf("Token introspection successful - token is active and valid")
+			if introspectResp.ClientId != nil {
+				clientID := *introspectResp.ClientId
+				scope := ""
+				if introspectResp.Scope != nil {
+					scope = *introspectResp.Scope
+				}
+				t.Logf("Token details: ClientID=%s, Scope=%s", clientID, scope)
+			}
 		}),
 	)
 	app.RequireStart()
