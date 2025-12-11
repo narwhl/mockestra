@@ -2,7 +2,10 @@ package nats
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
@@ -24,7 +27,42 @@ const (
 	RoutePort = "6222/tcp"
 
 	ContainerPrettyName = "NATS Server"
+
+	// TLS-related container labels for PostReady hooks
+	tlsEnabledLabel      = "mockestra.nats.tls.enabled"
+	tlsInsecureSkipLabel = "mockestra.nats.tls.insecure_skip_verify"
+	tlsVerifyLabel       = "mockestra.nats.tls.verify"
+	tlsCAPathLabel       = "mockestra.nats.tls.ca_path"
+	tlsCertPathLabel     = "mockestra.nats.tls.cert_path"
+	tlsKeyPathLabel      = "mockestra.nats.tls.key_path"
+
+	// Container paths for TLS certificates
+	containerCertPath = "/etc/nats/certs/server.pem"
+	containerKeyPath  = "/etc/nats/certs/server-key.pem"
+	containerCAPath   = "/etc/nats/certs/ca.pem"
 )
+
+// TLSConfig holds TLS certificate configuration for the NATS server
+type TLSConfig struct {
+	// Certificate - either CertFile (path) or CertReader (io.Reader)
+	CertFile   string
+	CertReader io.Reader
+
+	// Private key - either KeyFile (path) or KeyReader (io.Reader)
+	KeyFile   string
+	KeyReader io.Reader
+
+	// CA certificate (optional) - either CAFile (path) or CAReader (io.Reader)
+	CAFile   string
+	CAReader io.Reader
+
+	// Verify requires and verifies client certificates (mTLS)
+	Verify bool
+
+	// InsecureSkipVerify for client connections in PostReady hooks
+	// Useful when using self-signed certificates
+	InsecureSkipVerify bool
+}
 
 type RequestParams struct {
 	fx.In
@@ -37,6 +75,91 @@ var WithUsername = nats.WithUsername
 var WithPassword = nats.WithPassword
 var WithArgument = nats.WithArgument
 var WithConfigFile = nats.WithConfigFile
+
+// WithTLS configures TLS for the NATS server by mounting certificates and enabling TLS mode
+func WithTLS(config TLSConfig) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		// Validate required fields
+		if config.CertFile == "" && config.CertReader == nil {
+			return fmt.Errorf("WithTLS: CertFile or CertReader is required")
+		}
+		if config.KeyFile == "" && config.KeyReader == nil {
+			return fmt.Errorf("WithTLS: KeyFile or KeyReader is required")
+		}
+
+		// Initialize labels map if nil
+		if req.Labels == nil {
+			req.Labels = make(map[string]string)
+		}
+		req.Labels[tlsEnabledLabel] = "true"
+		if config.InsecureSkipVerify {
+			req.Labels[tlsInsecureSkipLabel] = "true"
+		}
+
+		// Mount certificate (Reader or File)
+		if config.CertReader != nil {
+			req.Files = append(req.Files, testcontainers.ContainerFile{
+				Reader:            config.CertReader,
+				ContainerFilePath: containerCertPath,
+				FileMode:          0644,
+			})
+		} else if config.CertFile != "" {
+			req.Files = append(req.Files, testcontainers.ContainerFile{
+				HostFilePath:      config.CertFile,
+				ContainerFilePath: containerCertPath,
+				FileMode:          0644,
+			})
+		}
+
+		// Mount key (Reader or File)
+		if config.KeyReader != nil {
+			req.Files = append(req.Files, testcontainers.ContainerFile{
+				Reader:            config.KeyReader,
+				ContainerFilePath: containerKeyPath,
+				FileMode:          0600,
+			})
+		} else if config.KeyFile != "" {
+			req.Files = append(req.Files, testcontainers.ContainerFile{
+				HostFilePath:      config.KeyFile,
+				ContainerFilePath: containerKeyPath,
+				FileMode:          0600,
+			})
+		}
+
+		// Add TLS arguments
+		req.Cmd = append(req.Cmd, "--tls", "--tlscert="+containerCertPath, "--tlskey="+containerKeyPath)
+
+		// Store cert and key paths for hooks (used for verification and mTLS client auth)
+		req.Labels[tlsCertPathLabel] = containerCertPath
+		req.Labels[tlsKeyPathLabel] = containerKeyPath
+
+		// Optional CA certificate
+		if config.CAReader != nil || config.CAFile != "" {
+			if config.CAReader != nil {
+				req.Files = append(req.Files, testcontainers.ContainerFile{
+					Reader:            config.CAReader,
+					ContainerFilePath: containerCAPath,
+					FileMode:          0644,
+				})
+			} else {
+				req.Files = append(req.Files, testcontainers.ContainerFile{
+					HostFilePath:      config.CAFile,
+					ContainerFilePath: containerCAPath,
+					FileMode:          0644,
+				})
+			}
+			req.Cmd = append(req.Cmd, "--tlscacert="+containerCAPath)
+			req.Labels[tlsCAPathLabel] = containerCAPath
+		}
+
+		if config.Verify {
+			req.Cmd = append(req.Cmd, "--tlsverify")
+			req.Labels[tlsVerifyLabel] = "true"
+		}
+
+		return nil
+	}
+}
 
 // WithJetStreamStorageDir configures the storage directory for JetStream
 func WithJetStreamStorageDir(dir string) testcontainers.CustomizeRequestOption {
@@ -71,18 +194,95 @@ type StreamConfig struct {
 	Description  string
 }
 
+// connectToNATS creates a NATS connection, auto-detecting TLS from container labels.
+// If TLS is enabled, it copies certs from the container for verification.
+// If mTLS (Verify) is enabled, it also presents the server cert as client credentials.
+func connectToNATS(ctx context.Context, container testcontainers.Container) (*natsgo.Conn, error) {
+	endpoint, err := container.PortEndpoint(ctx, Port, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NATS endpoint: %w", err)
+	}
+
+	inspect, err := container.Inspect(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container: %w", err)
+	}
+	labels := inspect.Config.Labels
+
+	var opts []natsgo.Option
+	if labels[tlsEnabledLabel] == "true" {
+		endpoint = "tls://" + endpoint
+
+		if labels[tlsInsecureSkipLabel] == "true" {
+			opts = append(opts, natsgo.Secure(&tls.Config{InsecureSkipVerify: true}))
+		} else {
+			tlsConfig := &tls.Config{}
+
+			// Copy CA cert (or server cert for self-signed) from container for server verification
+			caCertPath := labels[tlsCAPathLabel]
+			if caCertPath == "" {
+				caCertPath = labels[tlsCertPathLabel] // Fall back to server cert if no CA
+			}
+
+			if caCertPath != "" {
+				caCertPEM, err := copyFileFromContainer(ctx, container, caCertPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to copy CA cert: %w", err)
+				}
+
+				certPool := x509.NewCertPool()
+				if !certPool.AppendCertsFromPEM(caCertPEM) {
+					return nil, fmt.Errorf("failed to parse CA cert")
+				}
+				tlsConfig.RootCAs = certPool
+			}
+
+			// If mTLS is enabled, present server cert as client credentials
+			if labels[tlsVerifyLabel] == "true" {
+				certPath := labels[tlsCertPathLabel]
+				keyPath := labels[tlsKeyPathLabel]
+
+				certPEM, err := copyFileFromContainer(ctx, container, certPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to copy client cert: %w", err)
+				}
+
+				keyPEM, err := copyFileFromContainer(ctx, container, keyPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to copy client key: %w", err)
+				}
+
+				clientCert, err := tls.X509KeyPair(certPEM, keyPEM)
+				if err != nil {
+					return nil, fmt.Errorf("failed to load client cert: %w", err)
+				}
+				tlsConfig.Certificates = []tls.Certificate{clientCert}
+			}
+
+			opts = append(opts, natsgo.Secure(tlsConfig))
+		}
+	}
+
+	return natsgo.Connect(endpoint, opts...)
+}
+
+// copyFileFromContainer copies a file from the container and returns its contents
+func copyFileFromContainer(ctx context.Context, container testcontainers.Container, path string) ([]byte, error) {
+	reader, err := container.CopyFileFromContainer(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	return io.ReadAll(reader)
+}
+
 // WithStream creates a JetStream stream after the container starts
 func WithStream(config StreamConfig) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
 		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
 			PostReadies: []testcontainers.ContainerHook{
 				func(ctx context.Context, container testcontainers.Container) error {
-					endpoint, err := container.PortEndpoint(ctx, Port, "")
-					if err != nil {
-						return fmt.Errorf("failed to get NATS endpoint: %w", err)
-					}
-
-					nc, err := natsgo.Connect(endpoint)
+					nc, err := connectToNATS(ctx, container)
 					if err != nil {
 						return fmt.Errorf("failed to connect to NATS: %w", err)
 					}
@@ -151,12 +351,7 @@ func WithJetStreamCallback(fn func(context.Context, jetstream.JetStream) error) 
 		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
 			PostReadies: []testcontainers.ContainerHook{
 				func(ctx context.Context, container testcontainers.Container) error {
-					endpoint, err := container.PortEndpoint(ctx, Port, "")
-					if err != nil {
-						return fmt.Errorf("failed to get NATS endpoint: %w", err)
-					}
-
-					nc, err := natsgo.Connect(endpoint)
+					nc, err := connectToNATS(ctx, container)
 					if err != nil {
 						return fmt.Errorf("failed to connect to NATS: %w", err)
 					}

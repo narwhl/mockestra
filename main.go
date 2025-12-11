@@ -28,11 +28,15 @@ type ContainerPostReadyHook func(endpoints map[string]string) error
 // {label} is for tagging incoming testcontainers.ContainerCustomizer with ResultTags.
 func BuildContainerModule(label string, options ...fx.Option) ContainerModule {
 	return func(values ...testcontainers.ContainerCustomizer) fx.Option {
+		// Create a copy of the base options to avoid mutating the shared slice
+		result := make([]fx.Option, len(options), len(options)+len(values))
+		copy(result, options)
+
 		for _, v := range values {
 			if v == nil {
 				continue
 			}
-			options = append(options, fx.Supply(
+			result = append(result, fx.Supply(
 				fx.Annotate(
 					v,
 					fx.As(new(testcontainers.ContainerCustomizer)),
@@ -40,7 +44,7 @@ func BuildContainerModule(label string, options ...fx.Option) ContainerModule {
 				),
 			))
 		}
-		return fx.Options(options...)
+		return fx.Options(result...)
 	}
 }
 
