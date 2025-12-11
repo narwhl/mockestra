@@ -676,3 +676,100 @@ func TestNATSWithTLSAndStreamHook(t *testing.T) {
 	app.RequireStart()
 	t.Cleanup(app.RequireStop)
 }
+
+func TestNATSWithMTLS(t *testing.T) {
+	// Generate test certificates
+	caCert, serverCert, serverKey, err := generateTestCerts()
+	if err != nil {
+		t.Fatalf("Failed to generate test certificates: %v", err)
+	}
+
+	// Write certs to temp files
+	tempDir := t.TempDir()
+	caFile := filepath.Join(tempDir, "ca.pem")
+	certFile := filepath.Join(tempDir, "server.pem")
+	keyFile := filepath.Join(tempDir, "server-key.pem")
+
+	if err := os.WriteFile(caFile, caCert, 0644); err != nil {
+		t.Fatalf("Failed to write CA file: %v", err)
+	}
+	if err := os.WriteFile(certFile, serverCert, 0644); err != nil {
+		t.Fatalf("Failed to write cert file: %v", err)
+	}
+	if err := os.WriteFile(keyFile, serverKey, 0600); err != nil {
+		t.Fatalf("Failed to write key file: %v", err)
+	}
+
+	app := fxtest.New(
+		t,
+		fx.NopLogger,
+		fx.Supply(
+			fx.Annotate(
+				"latest",
+				fx.ResultTags(`name:"nats_version"`),
+			),
+		),
+		fx.Supply(fx.Annotate(
+			fmt.Sprintf("nats-mtls-test-%x", time.Now().Unix()),
+			fx.ResultTags(`name:"prefix"`),
+		)),
+		container.Module(
+			container.WithTLS(container.TLSConfig{
+				CertFile: certFile,
+				KeyFile:  keyFile,
+				CAFile:   caFile,
+				Verify:   true, // Enable mTLS - require client certificates
+			}),
+		),
+		fx.Invoke(func(params struct {
+			fx.In
+			Container testcontainers.Container `name:"nats"`
+		}) {
+			ctx := context.Background()
+			endpoint, err := params.Container.PortEndpoint(ctx, container.Port, "")
+			if err != nil {
+				t.Fatalf("Failed to get NATS container endpoint: %v", err)
+			}
+
+			// Create a cert pool with the CA
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM(caCert) {
+				t.Fatal("Failed to add CA cert to pool")
+			}
+
+			// Load client certificate (using same cert as server for testing)
+			clientCert, err := tls.X509KeyPair(serverCert, serverKey)
+			if err != nil {
+				t.Fatalf("Failed to load client certificate: %v", err)
+			}
+
+			// Connect with mTLS - presenting client certificate
+			nc, err := nats.Connect("tls://"+endpoint, nats.Secure(&tls.Config{
+				RootCAs:      certPool,
+				Certificates: []tls.Certificate{clientCert},
+			}))
+			if err != nil {
+				t.Fatalf("Failed to connect to NATS server with mTLS: %v", err)
+			}
+			defer nc.Close()
+
+			// Verify connection works
+			err = nc.Publish("foo", []byte("Hello mTLS World"))
+			if err != nil {
+				t.Fatalf("Failed to publish message: %v", err)
+			}
+
+			// Verify that connection without client cert fails
+			ncNoCert, err := nats.Connect("tls://"+endpoint, nats.Secure(&tls.Config{
+				RootCAs: certPool,
+			}))
+			if err == nil {
+				ncNoCert.Close()
+				t.Fatal("Expected connection without client cert to fail, but it succeeded")
+			}
+		}),
+	)
+
+	app.RequireStart()
+	t.Cleanup(app.RequireStop)
+}

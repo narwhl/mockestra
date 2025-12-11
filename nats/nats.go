@@ -79,6 +79,14 @@ var WithConfigFile = nats.WithConfigFile
 // WithTLS configures TLS for the NATS server by mounting certificates and enabling TLS mode
 func WithTLS(config TLSConfig) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
+		// Validate required fields
+		if config.CertFile == "" && config.CertReader == nil {
+			return fmt.Errorf("WithTLS: CertFile or CertReader is required")
+		}
+		if config.KeyFile == "" && config.KeyReader == nil {
+			return fmt.Errorf("WithTLS: KeyFile or KeyReader is required")
+		}
+
 		// Initialize labels map if nil
 		if req.Labels == nil {
 			req.Labels = make(map[string]string)
