@@ -16,16 +16,18 @@ import (
 type ProxyParams struct {
 	fx.In
 	MailslurperContainer testcontainers.Container `name:"mailslurper"`
+	APIProxyPort         int                      `name:"mailslurper_api_proxy_port"`
 	Lifecycle            fx.Lifecycle
 }
 
 func NewProxy(p ProxyParams) (*proxy.TCPProxy, error) {
-	mailslurperAPIEndpoint, err := p.MailslurperContainer.PortEndpoint(context.Background(), nat.Port(APIPort), "")
+	apiPort := nat.Port(fmt.Sprintf("%d/tcp", p.APIProxyPort))
+	mailslurperAPIEndpoint, err := p.MailslurperContainer.PortEndpoint(context.Background(), apiPort, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get mailslurper API endpoint: %w", err)
 	}
 	apiAccessProxy := proxy.TCPProxy{
-		ListenAddress: net.JoinHostPort(mockestra.LoopbackAddress, nat.Port(APIPort).Port()),
+		ListenAddress: net.JoinHostPort(mockestra.LoopbackAddress, apiPort.Port()),
 		TargetAddress: mailslurperAPIEndpoint,
 	}
 	if err := apiAccessProxy.Start(context.Background()); err != nil {
