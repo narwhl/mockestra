@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.temporal.io/api/workflowservice/v1"
+	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
@@ -103,6 +107,41 @@ func Actualize(p ContainerParams) (Result, error) {
 		Container:      c,
 		ContainerGroup: c,
 	}, nil
+}
+
+// WithNamespace registers a new Temporal namespace after the container starts.
+// The namespace is created with a 72-hour workflow execution retention period,
+// matching the Temporal CLI default.
+func WithNamespace(name string) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
+			PostReadies: []testcontainers.ContainerHook{
+				func(ctx context.Context, container testcontainers.Container) error {
+					addr, err := container.PortEndpoint(ctx, Port, "")
+					if err != nil {
+						return fmt.Errorf("failed to get temporal endpoint: %w", err)
+					}
+					namespaceClient, err := client.NewNamespaceClient(client.Options{
+						HostPort: addr,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to create temporal namespace client: %w", err)
+					}
+					defer namespaceClient.Close()
+					err = namespaceClient.Register(ctx, &workflowservice.RegisterNamespaceRequest{
+						Namespace:                        name,
+						WorkflowExecutionRetentionPeriod: durationpb.New(72 * time.Hour), // matches temporal CLI default
+					})
+					if err != nil {
+						return fmt.Errorf("failed to register temporal namespace %s: %w", name, err)
+					}
+					slog.Info("Temporal namespace created", "namespace", name)
+					return nil
+				},
+			},
+		})
+		return nil
+	}
 }
 
 var WithPostReadyHook = mockestra.WithPostReadyHook
