@@ -66,6 +66,9 @@ func WithBasicAuth(htpasswdPath string) testcontainers.CustomizeRequestOption {
 			ContainerFilePath: "/auth/htpasswd",
 			FileMode:          0o644,
 		})
+		req.WaitingFor = wait.ForHTTP("/v2/").WithPort(Port).WithStatusCodeMatcher(func(status int) bool {
+			return status == 200 || status == 401
+		})
 		return nil
 	}
 }
