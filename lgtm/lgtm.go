@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
@@ -24,6 +25,43 @@ const (
 
 	ContainerPrettyName = "LGTM"
 )
+
+
+// WithDashboard provisions a Grafana dashboard from a JSON string.
+// Each call adds a separate dashboard to the LGTM Grafana instance.
+// Dashboard represents a Grafana dashboard to provision.
+type Dashboard struct {
+	Name string
+	JSON string
+}
+
+func WithDashboard(dashboards ...Dashboard) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		provisioningYAML := `apiVersion: 1
+
+providers:
+  - name: "custom-dashboards"
+    type: file
+    options:
+      path: /otel-lgtm/dashboards
+      foldersFromFilesStructure: false
+`
+		req.Files = append(req.Files, testcontainers.ContainerFile{
+			Reader:            strings.NewReader(provisioningYAML),
+			ContainerFilePath: "/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml",
+			FileMode:          0o644,
+		})
+
+		for _, d := range dashboards {
+			req.Files = append(req.Files, testcontainers.ContainerFile{
+				Reader:            strings.NewReader(d.JSON),
+				ContainerFilePath: fmt.Sprintf("/otel-lgtm/dashboards/%s.json", d.Name),
+				FileMode:          0o644,
+			})
+		}
+		return nil
+	}
+}
 
 type RequestParams struct {
 	fx.In
