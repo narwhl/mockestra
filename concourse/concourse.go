@@ -61,6 +61,12 @@ func WithSecret(secret string) testcontainers.CustomizeRequestOption {
 	})
 }
 
+func WithExternalURL(url string) testcontainers.CustomizeRequestOption {
+	return testcontainers.WithEnv(map[string]string{
+		"CONCOURSE_EXTERNAL_URL": url,
+	})
+}
+
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 	_, portNumber := nat.SplitProtoPort(Port)
 	r := testcontainers.GenericContainerRequest{
