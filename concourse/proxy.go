@@ -19,14 +19,19 @@ type ProxyParams struct {
 	Lifecycle          fx.Lifecycle
 }
 
-func NewProxy(portName string, port nat.Port) func(p ProxyParams) (*proxy.TCPProxy, error) {
+// NewProxy creates a TCPProxy that forwards local traffic to the Concourse container.
+// portName is a human-readable label for logging (e.g., "API").
+// port is the container's exposed port used for the Docker port lookup (e.g., nat.Port(Port)).
+// Use [proxy.WithListenPort] to override which local port the proxy binds to;
+// by default it listens on the same port number as the container port.
+func NewProxy(portName string, port nat.Port, opts ...proxy.Option) func(p ProxyParams) (*proxy.TCPProxy, error) {
 	return func(p ProxyParams) (*proxy.TCPProxy, error) {
 		concourseEndpoint, err := p.ConcourseContainer.PortEndpoint(context.Background(), port, "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get concourse %s endpoint: %w", portName, err)
 		}
 		accessProxy := proxy.TCPProxy{
-			ListenAddress: net.JoinHostPort(mockestra.LoopbackAddress, port.Port()),
+			ListenAddress: net.JoinHostPort(mockestra.LoopbackAddress, proxy.ResolveListenPort(port, opts...)),
 			TargetAddress: concourseEndpoint,
 		}
 		if err := accessProxy.Start(context.Background()); err != nil {
