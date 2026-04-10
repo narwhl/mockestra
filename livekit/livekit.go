@@ -26,7 +26,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -100,9 +99,10 @@ var WithPostReadyHook = mockestra.WithPostReadyHook
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
-	Version string                               `name:"livekit_version"`
-	Opts    []testcontainers.ContainerCustomizer `group:"livekit"`
+	Prefix       string                               `name:"prefix"`
+	Version      string                               `name:"livekit_version"`
+	RTCProxyPort int                                  `name:"livekit_rtc_proxy_port"`
+	Opts         []testcontainers.ContainerCustomizer `group:"livekit"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
@@ -132,6 +132,16 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			return nil, err
 		}
 	}
+
+	// Apply the allocated RTC proxy port to the LiveKit config after all
+	// user-supplied customizers, so ICE candidates advertise the correct
+	// proxy address regardless of other WithListenPort calls.
+	if err := mutateConfig(&r, func(cfg *livekitConfig) {
+		cfg.RTC.TCPPort = p.RTCProxyPort
+	}); err != nil {
+		return nil, fmt.Errorf("failed to set RTC proxy port in livekit config: %w", err)
+	}
+
 	return &r, nil
 }
 
@@ -176,25 +186,17 @@ func Actualize(p ContainerParams) (Result, error) {
 	return Result{Container: c, ContainerGroup: c}, nil
 }
 
-// WithListenPort overrides the local port the RTC TCP proxy listens on.
-// When used, the LIVEKIT_CONFIG rtc.tcp_port is automatically updated to
-// match so that the ICE candidate advertised to browsers points to the
-// correct proxy address.
-func WithListenPort(port int) testcontainers.CustomizeRequestOption {
-	return func(req *testcontainers.GenericContainerRequest) error {
-		return mutateConfig(req, func(cfg *livekitConfig) {
-			cfg.RTC.TCPPort = port
-		})
-	}
-}
-
 var Module = mockestra.BuildContainerModule(
 	Tag,
 	fx.Provide(
+		fx.Annotate(
+			allocateRTCProxyPort,
+			fx.ResultTags(`name:"livekit_rtc_proxy_port"`),
+		),
 		fx.Annotate(New, fx.ResultTags(`name:"livekit"`)),
 		Actualize,
 		fx.Annotate(
-			NewProxy("RTC TCP", nat.Port(RTCTCPPort)),
+			NewProxy,
 			fx.ResultTags(`name:"livekit"`),
 		),
 	),
