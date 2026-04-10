@@ -225,6 +225,7 @@ graph LR
 | **concourse** | `concourse/concourse` | Concourse CI/CD | PostgreSQL |
 | **mailslurper** | `oryd/mailslurper` | Email testing tool | None |
 | **lgtm** | `grafana/otel-lgtm` | Grafana LGTM stack | None |
+| **livekit** | `livekit/livekit-server` | LiveKit WebRTC SFU (TCP-only) | None |
 
 ## Quick Start
 
