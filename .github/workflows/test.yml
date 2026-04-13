@@ -25,4 +25,4 @@ jobs:
           go-version-file: go.mod
 
       - name: Run tests
-        run: go test -v ./... # Run all tests in all modules
+        run: go test -v -p 2 ./... # Limit package parallelism to avoid exceeding container resource limits in CI
