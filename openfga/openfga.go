@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
 	"strings"
 
 	"github.com/docker/go-connections/nat"
@@ -23,7 +22,6 @@ import (
 
 const (
 	Image               = "openfga/openfga"
-	PlaygroundPort      = "3000/tcp"
 	HttpPort            = "8080/tcp"
 	GrpcPort            = "8081/tcp"
 	ContainerPrettyName = "OpenFGA"
@@ -95,20 +93,6 @@ func WithPresharedKey(token string) testcontainers.CustomizeRequestOption {
 	return func(req *testcontainers.GenericContainerRequest) error {
 		req.Env["OPENFGA_AUTHN_METHOD"] = "preshared"
 		req.Env["OPENFGA_AUTHN_PRESHARED_KEYS"] = token
-		return nil
-	}
-}
-
-func WithPlayground() testcontainers.CustomizeRequestOption {
-	return func(req *testcontainers.GenericContainerRequest) error {
-		req.Cmd = append(req.Cmd, "--playground-enabled")
-		req.ExposedPorts = append(req.ExposedPorts, PlaygroundPort)
-		req.WaitingFor = wait.ForAll(
-			req.WaitingFor,
-			wait.ForHTTP("/playground").WithPort(PlaygroundPort).WithStatusCodeMatcher(func(status int) bool {
-				return status == http.StatusOK
-			}),
-		)
 		return nil
 	}
 }
