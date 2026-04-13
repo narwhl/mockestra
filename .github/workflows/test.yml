@@ -6,17 +6,104 @@ on:
       - main
     paths:
       - "**/*.go"
+      - "go.mod"
+      - "go.sum"
   pull_request:
     paths:
       - "**/*.go"
+      - "go.mod"
+      - "go.sum"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
+  detect-changes:
     runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.detect.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: detect
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Discover all testable packages (subdirs with *_test.go files)
+            const allPackages = fs.readdirSync('.', { withFileTypes: true })
+              .filter(d => d.isDirectory() && !d.name.startsWith('.'))
+              .filter(d => fs.readdirSync(d.name).some(f => f.endsWith('_test.go')))
+              .map(d => d.name);
+
+            core.info(`All testable packages: ${allPackages.join(', ')}`);
+
+            // Get changed files
+            let changedFiles;
+            try {
+              if (context.eventName === 'pull_request') {
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  ...context.repo,
+                  pull_number: context.payload.pull_request.number,
+                });
+                changedFiles = files.map(f => f.filename);
+              } else {
+                const before = context.payload.before;
+                if (!before || before === '0000000000000000000000000000000000000000') {
+                  core.info('Initial or force push detected, testing all packages');
+                  core.setOutput('packages', JSON.stringify(allPackages));
+                  return;
+                }
+                const compare = await github.rest.repos.compareCommitsWithBasehead({
+                  ...context.repo,
+                  basehead: `${before}...${context.payload.after}`,
+                });
+                changedFiles = compare.data.files.map(f => f.filename);
+              }
+            } catch (error) {
+              core.warning(`Failed to detect changes: ${error.message}. Testing all packages.`);
+              core.setOutput('packages', JSON.stringify(allPackages));
+              return;
+            }
+
+            core.info(`Changed files: ${changedFiles.join(', ')}`);
+
+            // Check if root-level shared files changed
+            const hasRootChanges = changedFiles.some(f => {
+              const dir = path.dirname(f);
+              return (dir === '.' && (f.endsWith('.go') || f === 'go.mod' || f === 'go.sum')) || dir === 'proxy';
+            });
+
+            if (hasRootChanges) {
+              core.info('Root or proxy changes detected, testing all packages');
+              core.setOutput('packages', JSON.stringify(allPackages));
+              return;
+            }
+
+            // Collect directly changed packages
+            const packages = new Set();
+            for (const file of changedFiles) {
+              const dir = path.dirname(file);
+              if (dir !== '.' && allPackages.includes(dir)) {
+                packages.add(dir);
+              }
+            }
+
+            const result = [...packages].sort();
+            core.info(`Packages to test: ${result.join(', ') || '(none)'}`);
+            core.setOutput('packages', JSON.stringify(result));
+
+  test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.packages != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
     steps:
       - uses: actions/checkout@v5
       - name: Set up Go
@@ -25,4 +112,4 @@ jobs:
           go-version-file: go.mod
 
       - name: Run tests
-        run: go test -v -p 2 ./... # Limit package parallelism to avoid exceeding container resource limits in CI
+        run: go test -v ./${{ matrix.package }}
