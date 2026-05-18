@@ -378,7 +378,12 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			ExposedPorts: []string{Port, HttpPort, RoutePort},
 			Env:          map[string]string{},
 			Cmd:          []string{"-DV", "-js"},
-			WaitingFor:   wait.ForListeningPort(Port),
+			WaitingFor: wait.ForAll(
+				wait.ForListeningPort(Port),
+				wait.ForHTTP("/healthz").
+					WithPort(HttpPort).
+					WithStartupTimeout(30*time.Second),
+			),
 		},
 		Started: true,
 	}
