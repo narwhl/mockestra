@@ -377,8 +377,11 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
 			ExposedPorts: []string{Port, HttpPort, RoutePort},
 			Env:          map[string]string{},
-			Cmd:          []string{"-DV", "-js"},
-			WaitingFor:   wait.ForListeningPort(Port),
+			Cmd:          []string{"-DV", "-js", "-m", nat.Port(HttpPort).Port()},
+			WaitingFor: wait.ForAll(
+				wait.ForListeningPort(Port),
+				wait.ForHTTP("/healthz").WithPort(HttpPort),
+			),
 		},
 		Started: true,
 	}
