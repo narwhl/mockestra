@@ -114,9 +114,14 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
-			Image:        fmt.Sprintf("%s:%s", Image, p.Version),
-			ExposedPorts: []string{SignalPort, RTCTCPPort},
+			Name:  fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),
+			Image: fmt.Sprintf("%s:%s", Image, p.Version),
+			// Expose the dynamically-allocated RTC proxy port, NOT the static
+			// RTCTCPPort (7881): New() sets rtc.tcp_port = RTCProxyPort below,
+			// so LiveKit actually listens on RTCProxyPort inside the container.
+			// Exposing 7881 (its default) would publish a port nothing binds,
+			// and the RTC proxy would forward into a void.
+			ExposedPorts: []string{SignalPort, fmt.Sprintf("%d/tcp", p.RTCProxyPort)},
 			Env: map[string]string{
 				"LIVEKIT_CONFIG": string(defaultYAML),
 			},
