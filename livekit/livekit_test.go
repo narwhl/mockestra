@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/go-connections/nat"
 	container "github.com/narwhl/mockestra/livekit"
 	"github.com/narwhl/mockestra/proxy"
 	"github.com/testcontainers/testcontainers-go"
@@ -83,7 +82,7 @@ func TestLiveKitRTCProxy(t *testing.T) {
 
 			// The container must expose the dynamic RTC port — proof that the
 			// exposed port matches LiveKit's configured rtc.tcp_port.
-			rtcPort := nat.Port(fmt.Sprintf("%d/tcp", params.RTCProxyPort))
+			rtcPort := fmt.Sprintf("%d/tcp", params.RTCProxyPort)
 			rtcEndpoint, err := params.Container.PortEndpoint(t.Context(), rtcPort, "")
 			if err != nil {
 				t.Fatalf("RTC port %s not exposed by container (proxy would forward into a void): %v", rtcPort, err)

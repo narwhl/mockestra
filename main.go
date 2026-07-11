@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/testcontainers/testcontainers-go"
 	"go.uber.org/fx"
 )
@@ -58,7 +57,7 @@ func WithPostReadyHook(fn ContainerPostReadyHook) testcontainers.CustomizeReques
 				func(ctx context.Context, container testcontainers.Container) error {
 					endpoints := make(map[string]string)
 					for _, port := range req.ExposedPorts {
-						p, err := container.MappedPort(ctx, nat.Port(port))
+						p, err := container.MappedPort(ctx, port)
 						if err != nil {
 							return fmt.Errorf("encounter error getting addr: %w", err)
 						}

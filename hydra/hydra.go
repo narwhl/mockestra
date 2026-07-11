@@ -168,7 +168,7 @@ func Actualize(p ContainerParams) (Result, error) {
 			}
 			var endpoints []any
 			for port, label := range portLabels {
-				endpoint, err := c.PortEndpoint(context.Background(), nat.Port(port), "")
+				endpoint, err := c.PortEndpoint(context.Background(), port, "")
 				if err != nil {
 					return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
 				}
@@ -205,11 +205,11 @@ var Module = mockestra.BuildContainerModule(
 		),
 		Actualize,
 		fx.Annotate(
-			NewProxy("Public API", nat.Port(Port)),
+			NewProxy("Public API", Port),
 			fx.ResultTags(`name:"hydra"`),
 		),
 		fx.Annotate(
-			NewProxy("Admin API", nat.Port(AdminPort)),
+			NewProxy("Admin API", AdminPort),
 			fx.ResultTags(`name:"hydraadmin"`),
 		),
 	),

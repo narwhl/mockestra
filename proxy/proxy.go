@@ -5,9 +5,8 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
-
-	"github.com/docker/go-connections/nat"
 )
 
 // Option configures the behavior of a TCPProxy created by NewProxy.
@@ -24,7 +23,7 @@ type proxyConfig struct {
 //
 // Example:
 //
-//	concourse.NewProxy("API", nat.Port(concourse.Port), proxy.WithListenPort(58033))
+//	concourse.NewProxy("API", concourse.Port, proxy.WithListenPort(58033))
 func WithListenPort(port int) Option {
 	return func(c *proxyConfig) {
 		c.listenPort = strconv.Itoa(port)
@@ -34,7 +33,7 @@ func WithListenPort(port int) Option {
 // ResolveListenPort determines the local port for the proxy to listen on.
 // It applies the given options and returns the overridden port if [WithListenPort]
 // was provided, otherwise falls back to the port number from containerPort.
-func ResolveListenPort(containerPort nat.Port, opts ...Option) string {
+func ResolveListenPort(containerPort string, opts ...Option) string {
 	cfg := &proxyConfig{}
 	for _, o := range opts {
 		o(cfg)
@@ -42,7 +41,8 @@ func ResolveListenPort(containerPort nat.Port, opts ...Option) string {
 	if cfg.listenPort != "" {
 		return cfg.listenPort
 	}
-	return containerPort.Port()
+	port, _, _ := strings.Cut(containerPort, "/")
+	return port
 }
 
 type TCPProxy struct {

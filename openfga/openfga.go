@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
 	openfga "github.com/openfga/go-sdk"
 	"github.com/openfga/go-sdk/client"
@@ -165,7 +164,7 @@ func Actualize(p ContainerParams) (Result, error) {
 			}
 			var ports []any
 			for port, label := range portLabels {
-				p, err := c.MappedPort(ctx, nat.Port(port))
+				p, err := c.MappedPort(ctx, port)
 				if err != nil {
 					return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
 				}

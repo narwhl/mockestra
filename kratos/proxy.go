@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
 	"github.com/narwhl/mockestra/proxy"
 	"github.com/testcontainers/testcontainers-go"
@@ -21,10 +20,10 @@ type ProxyParams struct {
 
 // NewProxy creates a TCPProxy that forwards local traffic to the Kratos container.
 // portName is a human-readable label for logging (e.g., "Public API", "Admin API").
-// port is the container's exposed port used for the Docker port lookup (e.g., nat.Port(Port)).
+// port is the container's exposed port used for the Docker port lookup (e.g., Port).
 // Use [proxy.WithListenPort] to override which local port the proxy binds to;
 // by default it listens on the same port number as the container port.
-func NewProxy(portName string, port nat.Port, opts ...proxy.Option) func(p ProxyParams) (*proxy.TCPProxy, error) {
+func NewProxy(portName string, port string, opts ...proxy.Option) func(p ProxyParams) (*proxy.TCPProxy, error) {
 	return func(p ProxyParams) (*proxy.TCPProxy, error) {
 		kratosAPIEndpoint, err := p.KratosContainer.PortEndpoint(context.Background(), port, "")
 		if err != nil {

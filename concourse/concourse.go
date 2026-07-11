@@ -147,7 +147,7 @@ func Actualize(p ContainerParams) (Result, error) {
 			}
 			var ports []any
 			for port, label := range portLabels {
-				p, err := c.MappedPort(ctx, nat.Port(port))
+				p, err := c.MappedPort(ctx, port)
 				if err != nil {
 					return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
 				}
@@ -183,7 +183,7 @@ var Module = mockestra.BuildContainerModule(
 		),
 		Actualize,
 		fx.Annotate(
-			NewProxy("API", nat.Port(Port)),
+			NewProxy("API", Port),
 			fx.ResultTags(`name:"concourse"`),
 		),
 	),
