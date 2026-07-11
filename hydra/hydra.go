@@ -63,12 +63,15 @@ func WithKratosURL(url string) testcontainers.CustomizeRequestOption {
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"hydra_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"hydra"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	hydraCookieSecret, err := mockestra.RandomPassword(32)
 	if err != nil {
 		return nil, err
@@ -113,7 +116,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 type ContainerParams struct {
 	fx.In
 	Lifecycle                fx.Lifecycle
-	Prefix                   string                                  `name:"prefix"`
+	Prefix                   string                                  `name:"prefix" optional:"true"`
 	PostgresContainerRequest *testcontainers.GenericContainerRequest `name:"postgres"`
 	PostgresContainer        testcontainers.Container                `name:"postgres"`
 	Request                  *testcontainers.GenericContainerRequest `name:"hydra"`
@@ -126,6 +129,9 @@ type Result struct {
 }
 
 func Actualize(p ContainerParams) (Result, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	postgresIP, err := p.PostgresContainer.ContainerIP(context.Background())
 	if err != nil {
 		return Result{}, fmt.Errorf("failed to get %s container IP: %w", postgres.ContainerPrettyName, err)

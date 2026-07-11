@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
 	"go.uber.org/fx"
+	"go.uber.org/fx/fxtest"
 )
 
 const (
@@ -105,4 +107,33 @@ func Secrets(spec map[string]uint) (map[string]string, error) {
 		secrets[name] = secret
 	}
 	return secrets, nil
+}
+
+// GeneratePrefix returns a random, unique prefix suitable for naming containers.
+// Use it to auto-generate container names without worrying about collisions:
+//
+//	fx.Supply(fx.Annotate(mockestra.GeneratePrefix(), fx.ResultTags(`name:"prefix"`)))
+//
+// When the [prefix] dependency is not supplied to an fx app, each module's New
+// function falls back to calling this automatically.
+func GeneratePrefix() string {
+	b := make([]byte, 4)
+	io.ReadFull(rand.Reader, b)
+	return fmt.Sprintf("auto-%x", b)
+}
+
+// Run creates and starts an fxtest app with the given options, registering
+// automatic cleanup via t.Cleanup. It supplies fx.NopLogger so the test
+// output stays clean. This eliminates the boilerplate of fxtest.New +
+// RequireStart + Cleanup:
+//
+//	mockestra.Run(t,
+//	    redis.Module(),
+//	    fx.Invoke(func(c testcontainers.Container) { ... }),
+//	)
+func Run(t *testing.T, opts ...fx.Option) {
+	t.Helper()
+	app := fxtest.New(t, append([]fx.Option{fx.NopLogger}, opts...)...)
+	app.RequireStart()
+	t.Cleanup(app.RequireStop)
 }

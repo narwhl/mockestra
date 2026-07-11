@@ -54,7 +54,7 @@ func WithMigration(fn migration) testcontainers.CustomizeRequestOption {
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"timescaledb_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"timescaledb"`
 }
@@ -64,6 +64,9 @@ type RequestParams struct {
 // it is part of tri-phase process with Actualize and Run to create
 // a testcontainers.Container.
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),

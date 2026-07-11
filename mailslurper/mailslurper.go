@@ -59,13 +59,16 @@ func allocateAPIProxyPort() (int, error) {
 
 type RequestParams struct {
 	fx.In
-	Prefix       string                               `name:"prefix"`
+	Prefix       string                               `name:"prefix" optional:"true"`
 	Version      string                               `name:"mailslurper_version"`
 	APIProxyPort int                                  `name:"mailslurper_api_proxy_port"`
 	Opts         []testcontainers.ContainerCustomizer `group:"mailslurper"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	cfg := mailslurperConfig{
 		WwwAddress:     "0.0.0.0",
 		WwwPort:        4436,

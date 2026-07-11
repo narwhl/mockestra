@@ -105,12 +105,15 @@ func WithBucket(bucketName string) testcontainers.CustomizeRequestOption {
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"versitygw_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"versitygw"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	// Generate random credentials for S3 API access
 	accessKey, err := mockestra.RandomPassword(16)
 	if err != nil {

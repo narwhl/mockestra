@@ -29,12 +29,15 @@ func WithApiKey(apiKey string) testcontainers.CustomizeRequestOption {
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"typesense_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"typesense"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),

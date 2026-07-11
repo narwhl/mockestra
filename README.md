@@ -23,6 +23,7 @@ Mockestra is a Go library that bridges [Uber's Fx dependency injection framework
 - **Dependency Injection Native**: Built on top of Uber's Fx, enabling clean dependency management and lifecycle control
 - **Modular Architecture**: Each service (PostgreSQL, Redis, Temporal, etc.) is a self-contained module
 - **Automatic Lifecycle Management**: Containers start and stop automatically with your application lifecycle
+- **Zero-Config Defaults**: Image versions and container name prefixes are optional — supply them only when you need control
 - **Type-Safe Configuration**: Leverage Go's type system for configuration and dependencies
 - **Inter-Service Dependencies**: Automatically handles dependencies between services (e.g., Hydra depends on PostgreSQL)
 - **Port Mapping & Proxying**: Automatic port discovery and optional TCP proxying for consistent service access
@@ -58,6 +59,21 @@ Mockestra uses Fx's dependency injection to:
 - Inject configuration (versions, prefixes, custom options)
 - Manage inter-service dependencies (e.g., Hydra requires PostgreSQL)
 - Provide containers to your test code
+
+### 4. Test Helper & Auto-Prefix
+
+`mockestra.Run` is a convenience helper that wraps the standard Fx test app boilerplate:
+
+```go
+func TestExample(t *testing.T) {
+    mockestra.Run(t,
+        redis.Module(),
+        fx.Invoke(func(c testcontainers.Container) { ... }),
+    )
+}
+```
+
+Both image **versions** and the container-name **prefix** are optional. If you don't supply a `name:"prefix"` dependency, each module auto-generates a unique prefix via `mockestra.GeneratePrefix()`. Supply them explicitly only when you need deterministic names or pinned versions.
 
 ## Architecture
 
@@ -214,16 +230,20 @@ graph LR
 | **valkey** | `valkey/valkey` | Valkey (Redis fork) | None |
 | **timescaledb** | `timescale/timescaledb` | TimescaleDB (Postgres extension) | None |
 | **nats** | `nats` | NATS messaging system | None |
-| **minio** | `minio/minio` | MinIO object storage | None |
+| **minio** | `pgsty/minio` | MinIO object storage | None |
+| **rustfs** | `rustfs/rustfs` | RustFS object storage (S3-compatible) | None |
 | **versitygw** | `versity/versitygw` | Versity S3 Gateway | None |
 | **temporal** | `temporalio/auto-setup` | Temporal workflow engine | None |
 | **typesense** | `typesense/typesense` | Typesense search engine | None |
 | **openfga** | `openfga/openfga` | OpenFGA authorization | None |
+| **registry** | `registry` | Docker registry | None |
+| **dind** | `docker` | Docker-in-Docker | None |
 | **hydra** | `oryd/hydra` | Ory Hydra OAuth2 server | PostgreSQL |
-| **kratos** | `oryd/kratos` | Ory Kratos identity server | PostgreSQL |
+| **kratos** | `oryd/kratos` | Ory Kratos identity server | PostgreSQL, Hydra, Mailslurper |
 | **zitadel** | `ghcr.io/zitadel/zitadel` | ZITADEL identity platform | PostgreSQL |
 | **concourse** | `concourse/concourse` | Concourse CI/CD | PostgreSQL |
 | **mailslurper** | `oryd/mailslurper` | Email testing tool | None |
+| **kanidm** | `kanidm/server` | Kanidm identity platform | None |
 | **lgtm** | `grafana/otel-lgtm` | Grafana LGTM stack | None |
 | **livekit** | `livekit/livekit-server` | LiveKit WebRTC SFU (TCP-only) | None |
 
@@ -240,36 +260,35 @@ import (
     "testing"
 
     "github.com/jackc/pgx/v5"
+    "github.com/narwhl/mockestra"
     "github.com/narwhl/mockestra/postgres"
     "github.com/testcontainers/testcontainers-go"
     "go.uber.org/fx"
-    "go.uber.org/fx/fxtest"
 )
 
 func TestWithPostgres(t *testing.T) {
-    app := fxtest.New(
-        t,
-        // Supply required configuration
-        fx.Supply(
-            fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
-            fx.Annotate("myapp-test", fx.ResultTags(`name:"prefix"`)),
-        ),
-        
+    mockestra.Run(t,
+        // Supply the image version (prefix is auto-generated)
+        fx.Supply(fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`))),
+
         // Add the PostgreSQL module
         postgres.Module(
             postgres.WithUsername("testuser"),
             postgres.WithPassword("testpass"),
             postgres.WithDatabase("testdb"),
         ),
-        
+
         // Use the container in your code
-        fx.Invoke(func(container testcontainers.Container) {
-            endpoint, _ := container.PortEndpoint(
-                context.Background(), 
-                postgres.Port, 
+        fx.Invoke(func(params struct {
+            fx.In
+            Container testcontainers.Container `name:"postgres"`
+        }) {
+            endpoint, _ := params.Container.PortEndpoint(
+                context.Background(),
+                postgres.Port,
                 "",
             )
-            
+
             conn, err := pgx.Connect(
                 context.Background(),
                 fmt.Sprintf(
@@ -281,7 +300,7 @@ func TestWithPostgres(t *testing.T) {
                 t.Fatalf("Failed to connect: %v", err)
             }
             defer conn.Close(context.Background())
-            
+
             // Use your database connection
             var result int
             err = conn.QueryRow(context.Background(), "SELECT 1").Scan(&result)
@@ -290,24 +309,22 @@ func TestWithPostgres(t *testing.T) {
             }
         }),
     )
-    
-    app.RequireStart()
-    t.Cleanup(app.RequireStop)
 }
 ```
+
+`mockestra.Run` handles `fxtest.New`, `RequireStart`, and `t.Cleanup` for you.
+If you don't supply a `name:"prefix"` dependency, a random one is generated automatically.
 
 ### Multi-Service Example: Hydra + PostgreSQL
 
 ```go
 func TestHydraWithPostgres(t *testing.T) {
-    app := fxtest.New(
-        t,
+    mockestra.Run(t,
         fx.Supply(
             fx.Annotate("latest", fx.ResultTags(`name:"postgres_version"`)),
             fx.Annotate("v2.2.0", fx.ResultTags(`name:"hydra_version"`)),
-            fx.Annotate("hydra-test", fx.ResultTags(`name:"prefix"`)),
         ),
-        
+
         // PostgreSQL is required by Hydra
         postgres.Module(
             postgres.WithUsername("postgres"),
@@ -315,23 +332,22 @@ func TestHydraWithPostgres(t *testing.T) {
             postgres.WithDatabase("postgres"),
             postgres.WithExtraDatabase("hydra", "hydra", "hydrapass"),
         ),
-        
+
         // Hydra automatically uses the PostgreSQL container
         hydra.Module(
             hydra.WithURL("http://localhost:4444"),
         ),
-        
-        fx.Invoke(func(
-            pgContainer testcontainers.Container,
-            hydraContainer testcontainers.Container,
-        ) {
-            // Both containers are available and connected
+
+        // Both containers are available by name tag
+        fx.Invoke(func(params struct {
+            fx.In
+            PgContainer    testcontainers.Container `name:"postgres"`
+            HydraContainer testcontainers.Container `name:"hydra"`
+        }) {
+            // Both containers are running and connected
             // Hydra is configured to use PostgreSQL
         }),
     )
-    
-    app.RequireStart()
-    t.Cleanup(app.RequireStop)
 }
 ```
 

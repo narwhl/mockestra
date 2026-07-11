@@ -233,12 +233,15 @@ func WithOIDCConfig(config []*OIDCConfig) testcontainers.CustomizeRequestOption 
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"kratos_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"kratos"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	kratosCookieSecret, err := mockestra.RandomPassword(32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate kratos cookie secret: %w", err)
@@ -316,7 +319,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 type ContainerParams struct {
 	fx.In
 	Lifecycle                fx.Lifecycle
-	Prefix                   string                                  `name:"prefix"`
+	Prefix                   string                                  `name:"prefix" optional:"true"`
 	HydraContainer           testcontainers.Container                `name:"hydra"`
 	MailslurperContainer     testcontainers.Container                `name:"mailslurper"`
 	PostgresContainerRequest *testcontainers.GenericContainerRequest `name:"postgres"`
@@ -331,6 +334,9 @@ type Result struct {
 }
 
 func Actualize(p ContainerParams) (Result, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	hydraIP, err := p.HydraContainer.ContainerIP(context.Background())
 	if err != nil {
 		return Result{}, fmt.Errorf("failed to get %s container IP: %w", hydra.ContainerPrettyName, err)

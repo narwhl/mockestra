@@ -27,7 +27,7 @@ const (
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"concourse_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"concourse"`
 }
@@ -68,6 +68,9 @@ func WithExternalURL(url string) testcontainers.CustomizeRequestOption {
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	_, portNumber := nat.SplitProtoPort(Port)
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
