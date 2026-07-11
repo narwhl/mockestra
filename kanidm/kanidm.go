@@ -163,12 +163,15 @@ func generateSelfSignedCert(domain string) (certPEM, keyPEM []byte, err error) {
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"kanidm_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"kanidm"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	// Generate self-signed TLS certificates for the container
 	certPEM, keyPEM, err := generateSelfSignedCert(DefaultDomain)
 	if err != nil {

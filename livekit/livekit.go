@@ -99,13 +99,16 @@ var WithPostReadyHook = mockestra.WithPostReadyHook
 
 type RequestParams struct {
 	fx.In
-	Prefix       string                               `name:"prefix"`
+	Prefix       string                               `name:"prefix" optional:"true"`
 	Version      string                               `name:"livekit_version"`
 	RTCProxyPort int                                  `name:"livekit_rtc_proxy_port"`
 	Opts         []testcontainers.ContainerCustomizer `group:"livekit"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	// Seed env with default config so options can mutate via mutateConfig.
 	defaultYAML, err := yaml.Marshal(defaultConfig())
 	if err != nil {

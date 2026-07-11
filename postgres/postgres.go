@@ -54,7 +54,8 @@ func WithMigration(fn migration) testcontainers.CustomizeRequestOption {
 }
 
 func WithExtraDatabase(databaseName, username, password string) testcontainers.CustomizeRequestOption {
-	initScript := fmt.Sprintf(`
+	return func(req *testcontainers.GenericContainerRequest) error {
+		initScript := fmt.Sprintf(`
 -- Create user if not exists
 DO $$
 BEGIN
@@ -71,22 +72,36 @@ WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_database WHERE datname = '%[1]s')\ge
 -- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE %[1]s TO %[2]s;
 `, databaseName, username, password)
-	tempInitFile, err := os.CreateTemp("", fmt.Sprintf("%s-db-init.*.sql", databaseName))
-	if err != nil {
-		slog.Error("failed to create temp init file", "err", err)
+		tempInitFile, err := os.CreateTemp("", fmt.Sprintf("%s-db-init.*.sql", databaseName))
+		if err != nil {
+			return fmt.Errorf("failed to create temp init file: %w", err)
+		}
+		if _, err := tempInitFile.Write([]byte(initScript)); err != nil {
+			tempInitFile.Close()
+			os.Remove(tempInitFile.Name())
+			return fmt.Errorf("failed to write to temp init file: %w", err)
+		}
+		tempInitFile.Close()
+
+		initCustomizer := postgres.WithInitScripts(tempInitFile.Name())
+		if err := initCustomizer.Customize(req); err != nil {
+			os.Remove(tempInitFile.Name())
+			return err
+		}
+		req.LifecycleHooks = append(req.LifecycleHooks, testcontainers.ContainerLifecycleHooks{
+			PostTerminates: []testcontainers.ContainerHook{
+				func(context.Context, testcontainers.Container) error {
+					return os.Remove(tempInitFile.Name())
+				},
+			},
+		})
 		return nil
 	}
-	defer tempInitFile.Close()
-	if _, err := tempInitFile.Write([]byte(initScript)); err != nil {
-		slog.Error("failed to write to temp init file", "err", err)
-		return nil
-	}
-	return postgres.WithInitScripts(tempInitFile.Name())
 }
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"postgres_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"postgres"`
 }
@@ -96,6 +111,9 @@ type RequestParams struct {
 // it is part of tri-phase process with Actualize and Run to create
 // a testcontainers.Container.
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),

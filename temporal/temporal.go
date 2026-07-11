@@ -27,13 +27,15 @@ const (
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"temporal_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"temporal"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
-
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Name:         fmt.Sprintf("mock-%s-%s", p.Prefix, Tag),

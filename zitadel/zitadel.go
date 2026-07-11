@@ -29,12 +29,15 @@ var WithPostReadyHook = mockestra.WithPostReadyHook
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"zitadel_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"zitadel"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	r := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        fmt.Sprintf("%s:%s", Image, p.Version),

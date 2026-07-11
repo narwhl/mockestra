@@ -98,12 +98,15 @@ func WithPresharedKey(token string) testcontainers.CustomizeRequestOption {
 
 type RequestParams struct {
 	fx.In
-	Prefix  string                               `name:"prefix"`
+	Prefix  string                               `name:"prefix" optional:"true"`
 	Version string                               `name:"openfga_version"`
 	Opts    []testcontainers.ContainerCustomizer `group:"openfga"`
 }
 
 func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
+	if p.Prefix == "" {
+		p.Prefix = mockestra.GeneratePrefix()
+	}
 	req := testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Name:  fmt.Sprintf("mock-%s-openfga", p.Prefix),
