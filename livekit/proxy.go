@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
 	"github.com/narwhl/mockestra/proxy"
 	"github.com/testcontainers/testcontainers-go"
@@ -36,7 +35,7 @@ func NewProxy(p ProxyParams) (*proxy.TCPProxy, error) {
 	// rtc.tcp_port = RTCProxyPort), and that port — not the static RTCTCPPort
 	// (7881) — is the one exposed by the container request. Resolve its host
 	// mapping so the proxy forwards to the real RTC TCP listener.
-	rtcPort := nat.Port(fmt.Sprintf("%d/tcp", p.RTCProxyPort))
+	rtcPort := fmt.Sprintf("%d/tcp", p.RTCProxyPort)
 	livekitEndpoint, err := p.LiveKitContainer.PortEndpoint(context.Background(), rtcPort, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s RTC TCP endpoint: %w", ContainerPrettyName, err)

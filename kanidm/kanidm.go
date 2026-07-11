@@ -14,7 +14,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -249,7 +248,7 @@ func Actualize(p ContainerParams) (Result, error) {
 			}
 			var ports []any
 			for port, label := range portLabels {
-				p, err := c.MappedPort(ctx, nat.Port(port))
+				p, err := c.MappedPort(ctx, port)
 				if err != nil {
 					return fmt.Errorf("failed to get mapped port for %s: %w", port, err)
 				}

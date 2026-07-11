@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -139,7 +138,7 @@ func Actualize(p ContainerParams) (Result, error) {
 			}
 			var endpoints []any
 			for port, label := range portLabels {
-				endpoint, err := c.PortEndpoint(context.Background(), nat.Port(port), "")
+				endpoint, err := c.PortEndpoint(context.Background(), port, "")
 				if err != nil {
 					return fmt.Errorf("an error occurred while querying %s container mapped port: %w", ContainerPrettyName, err)
 				}

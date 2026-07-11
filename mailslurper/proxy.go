@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/narwhl/mockestra"
 	"github.com/narwhl/mockestra/proxy"
 	"github.com/testcontainers/testcontainers-go"
@@ -21,13 +20,13 @@ type ProxyParams struct {
 }
 
 func NewProxy(p ProxyParams) (*proxy.TCPProxy, error) {
-	apiPort := nat.Port(fmt.Sprintf("%d/tcp", p.APIProxyPort))
+	apiPort := fmt.Sprintf("%d/tcp", p.APIProxyPort)
 	mailslurperAPIEndpoint, err := p.MailslurperContainer.PortEndpoint(context.Background(), apiPort, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get mailslurper API endpoint: %w", err)
 	}
 	apiAccessProxy := proxy.TCPProxy{
-		ListenAddress: net.JoinHostPort(mockestra.LoopbackAddress, apiPort.Port()),
+		ListenAddress: net.JoinHostPort(mockestra.LoopbackAddress, fmt.Sprintf("%d", p.APIProxyPort)),
 		TargetAddress: mailslurperAPIEndpoint,
 	}
 	if err := apiAccessProxy.Start(context.Background()); err != nil {
