@@ -246,6 +246,7 @@ graph LR
 | **kanidm** | `kanidm/server` | Kanidm identity platform | None |
 | **lgtm** | `grafana/otel-lgtm` | Grafana LGTM stack | None |
 | **livekit** | `livekit/livekit-server` | LiveKit WebRTC SFU (TCP-only) | None |
+| **hatchet** | `ghcr.io/hatchet-dev/hatchet/hatchet-dashboard` | Hatchet task queue and workflow engine | None |
 
 ## Quick Start
 
