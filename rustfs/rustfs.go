@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -54,14 +55,27 @@ func WithBucket(bucketName string) testcontainers.CustomizeRequestOption {
 					if err != nil {
 						return fmt.Errorf("failed to create rustfs client: %w", err)
 					}
-					exists, err := client.BucketExists(ctx, bucketName)
-					if err != nil {
-						return fmt.Errorf("failed to check if bucket %s exists: %w", bucketName, err)
-					}
-					if !exists {
-						err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
-						if err != nil {
-							return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
+					// RustFS reports "Service not ready: waiting for storage_quorum" for a short
+					// window after /health already responds OK, so a single call can race startup.
+					// Poll the S3 API until it accepts bucket operations instead.
+					const s3ReadyTimeout = 60 * time.Second
+					deadline := time.Now().Add(s3ReadyTimeout)
+
+					for {
+						exists, err := client.BucketExists(ctx, bucketName)
+						if err == nil && !exists {
+							err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+						}
+						if err == nil {
+							break
+						}
+						if time.Now().After(deadline) {
+							return fmt.Errorf("bucket %s not ready after %s: %w", bucketName, s3ReadyTimeout, err)
+						}
+						select {
+						case <-ctx.Done():
+							return fmt.Errorf("context canceled while waiting for bucket %s: %w", bucketName, ctx.Err())
+						case <-time.After(500 * time.Millisecond):
 						}
 					}
 					return nil
@@ -105,7 +119,7 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 				Port,
 				ConsolePort,
 			},
-			Env: make(map[string]string),
+			Env:  make(map[string]string),
 			User: "10001",
 		},
 		Started: true,

@@ -205,7 +205,9 @@ func New(p RequestParams) (*testcontainers.GenericContainerRequest, error) {
 					FileMode:          0o600,
 				},
 			},
-			WaitingFor: wait.ForLog("ready to rock").WithStartupTimeout(120 * time.Second),
+			// Kanidm 1.11 changed the ready log casing ("ready to rock" -> "Ready to rock!");
+			// match the casing-stable part of the message so image drift cannot wedge the wait.
+			WaitingFor: wait.ForLog("to rock").WithStartupTimeout(300 * time.Second),
 		},
 		Started: true,
 	}
