@@ -7,7 +7,7 @@ require (
 	github.com/coreos/go-oidc v2.5.0+incompatible
 	github.com/docker/go-connections v0.7.0
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/minio/minio-go/v7 v7.2.1
 	github.com/nats-io/nats.go v1.52.0
 	github.com/openfga/go-sdk v0.8.2
