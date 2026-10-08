@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # The otel stable (1.x) and experimental (0.x) modules move in lockstep;
+      # bumping them together keeps coupled deps like otelslog and otlploghttp
+      # compatible with the otel/log API they are built against.
+      opentelemetry:
+        patterns:
+          - go.opentelemetry.io*
