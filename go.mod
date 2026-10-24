@@ -17,15 +17,15 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/nats v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/typesense/typesense-go/v3 v3.2.0
-	github.com/valkey-io/valkey-go v1.0.78
+	github.com/valkey-io/valkey-go v1.0.79
 	github.com/zitadel/zitadel-go/v3 v3.30.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.21.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.23.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/sdk/log v1.47.0
-	go.temporal.io/api v1.63.7
-	go.temporal.io/sdk v1.49.0
+	go.temporal.io/api v1.64.0
+	go.temporal.io/sdk v1.50.0
 	go.uber.org/fx v1.24.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/oauth2 v0.37.0
