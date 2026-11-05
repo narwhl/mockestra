@@ -531,6 +531,13 @@ Contributions are welcome! To add a new module:
 4. Add comprehensive tests
 5. Update this README
 
+Run a module's integration tests with `go test -v ./<module>` and a running Docker daemon.
+Concourse also needs privileged containers to run its nested task worker.
+Its CI job uses `ubuntu-24.04`, the last passing runner before `ubuntu-latest` moved to
+Ubuntu 26.04 and its build-event connection began hanging; other modules continue to
+use `ubuntu-latest`. Concourse build-event checks have a two-minute deadline per build
+and print the Concourse container logs on failure.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

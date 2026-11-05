@@ -98,7 +98,8 @@ jobs:
   test:
     needs: detect-changes
     if: needs.detect-changes.outputs.packages != '[]'
-    runs-on: ubuntu-latest
+    # Concourse's build-event stream hangs on Ubuntu 26.04; keep its last passing runner.
+    runs-on: ${{ matrix.package == 'concourse' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     timeout-minutes: 15
     strategy:
       fail-fast: false

@@ -1,9 +1,11 @@
 package concourse_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/atc/event"
 	"github.com/concourse/concourse/go-concourse/concourse"
+	"github.com/concourse/concourse/go-concourse/concourse/eventstream"
 	"github.com/concourse/concourse/vars"
 	"github.com/docker/go-connections/nat"
 
@@ -23,6 +26,7 @@ import (
 	"github.com/narwhl/mockestra/postgres"
 	"github.com/narwhl/mockestra/proxy"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/vito/go-sse/sse"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
 	"golang.org/x/oauth2"
@@ -82,6 +86,23 @@ func TestConcourseModule(t *testing.T) {
 			fx.In
 			Container testcontainers.Container `name:"concourse"`
 		}) {
+			defer func() {
+				if !t.Failed() {
+					return
+				}
+				logs, err := params.Container.Logs(context.Background())
+				if err != nil {
+					t.Logf("Failed to get Concourse container logs: %v", err)
+					return
+				}
+				defer logs.Close()
+				output, err := io.ReadAll(logs)
+				if err != nil {
+					t.Logf("Failed to read Concourse container logs: %v", err)
+				}
+				t.Logf("Concourse container logs:\n%s", output)
+			}()
+
 			endpoint, err := params.Container.PortEndpoint(t.Context(), container.Port, "http")
 			if err != nil {
 				t.Fatalf("Failed to get %s container endpoint: %v", container.ContainerPrettyName, err)
@@ -208,39 +229,10 @@ func TestConcourseModule(t *testing.T) {
 					t.Fatalf("Failed to create job build: %v", err)
 				}
 
-				// watches the event stream for job succeeded event
-				// uses the underlying event stream from watch command
-				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/commands/watch.go#L77
-				eventSource, err := client.BuildEvents(fmt.Sprintf("%d", build.ID))
-				if err != nil {
-					t.Fatalf("Failed to get build events: %v", err)
-				}
-				defer eventSource.Close()
-
-				// event loop implementation modified from event stream rendering in fly CLI
-				// https://github.com/concourse/concourse/blob/ff09ee64fccee8f174e061ddfe33a3d46c5f5ee5/fly/eventstream/render.go#L19
-			eventLoop:
-				for {
-					ev, err := eventSource.NextEvent()
-					if err != nil {
-						if err == io.EOF {
-							t.Errorf("reached end of event stream without finding job succeeded event")
-							break
-						} else {
-							t.Errorf("Failed to parse event: %v", err)
-						}
-					}
-					switch e := ev.(type) {
-					case event.Log:
-						// log job output
-						t.Log(e.Payload)
-					case event.Status:
-						switch e.Status {
-						case "succeeded":
-							// successfully completed job, break out of event loop
-							break eventLoop
-						}
-					}
+				ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+				defer cancel()
+				if err := watchBuild(ctx, client, build.ID, func(payload string) { t.Log(payload) }); err != nil {
+					t.Fatal(err)
 				}
 			})
 
@@ -320,48 +312,25 @@ jobs:
 					t.Fatalf("Failed to create job build: %v", err)
 				}
 
-				eventSource, err := client.BuildEvents(fmt.Sprintf("%d", build.ID))
-				if err != nil {
-					t.Fatalf("Failed to get build events: %v", err)
-				}
-				defer eventSource.Close()
-
 				// Track which messages we've seen
 				messagesFound := map[string]bool{
 					"First":  false,
 					"Second": false,
 				}
 
-			eventLoop2:
-				for {
-					ev, err := eventSource.NextEvent()
-					if err != nil {
-						if err == io.EOF {
-							break
-						} else {
-							t.Errorf("Failed to parse event: %v", err)
-						}
+				ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+				defer cancel()
+				err = watchBuild(ctx, client, build.ID, func(payload string) {
+					t.Log(payload)
+					if strings.Contains(payload, "First") {
+						messagesFound["First"] = true
 					}
-					switch e := ev.(type) {
-					case event.Log:
-						payload := e.Payload
-						// Check if we see our expected messages using substring search
-						if strings.Contains(payload, "First") {
-							messagesFound["First"] = true
-						}
-						if strings.Contains(payload, "Second") {
-							messagesFound["Second"] = true
-						}
-					case event.Status:
-						switch e.Status {
-						case "succeeded":
-							// Job completed successfully
-							break eventLoop2
-						case "failed":
-							t.Errorf("Job failed unexpectedly")
-							break eventLoop2
-						}
+					if strings.Contains(payload, "Second") {
+						messagesFound["Second"] = true
 					}
+				})
+				if err != nil {
+					t.Fatal(err)
 				}
 
 				// Verify both messages were found
@@ -466,4 +435,49 @@ func TestConcourseModule_Proxy(t *testing.T) {
 	app.RequireStart()
 
 	t.Cleanup(app.RequireStop)
+}
+
+// BuildEvents retries connection failures indefinitely, including before it returns
+// an event source. Create the source first so cancellation can interrupt both
+// connection establishment and reads.
+func watchBuild(ctx context.Context, client concourse.Client, buildID int, logOutput func(string)) error {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/api/v1/builds/%d/events", client.URL(), buildID),
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	source := sse.NewEventSource(client.HTTPClient(), time.Second, func() *http.Request {
+		return req.Clone(ctx)
+	})
+	defer source.Close()
+	stop := context.AfterFunc(ctx, func() { source.Close() })
+	defer stop()
+	stream := eventstream.NewSSEEventStream(source)
+
+	for {
+		ev, err := stream.NextEvent()
+		if err != nil {
+			if ctx.Err() != nil {
+				return fmt.Errorf("waiting for build %d: %w", buildID, ctx.Err())
+			}
+			return fmt.Errorf("build %d event stream ended before success: %w", buildID, err)
+		}
+		switch e := ev.(type) {
+		case event.Log:
+			logOutput(e.Payload)
+		case event.Error:
+			return fmt.Errorf("build %d: %s", buildID, e.Message)
+		case event.Status:
+			switch e.Status {
+			case "succeeded":
+				return nil
+			case "failed", "errored", "aborted":
+				return fmt.Errorf("build %d ended with status %s", buildID, e.Status)
+			}
+		}
+	}
 }
