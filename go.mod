@@ -7,7 +7,7 @@ require (
 	github.com/coreos/go-oidc v2.5.0+incompatible
 	github.com/docker/go-connections v0.8.2
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/jackc/pgx/v5 v5.11.0
+	github.com/jackc/pgx/v5 v5.12.0
 	github.com/minio/minio-go/v7 v7.4.1
 	github.com/nats-io/nats.go v1.55.0
 	github.com/openfga/go-sdk v0.8.3
@@ -25,7 +25,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.23.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/sdk/log v1.47.0
-	go.temporal.io/api v1.64.0
+	go.temporal.io/api v1.64.1
 	go.temporal.io/sdk v1.50.0
 	go.uber.org/fx v1.24.0
 	golang.org/x/crypto v0.58.0
